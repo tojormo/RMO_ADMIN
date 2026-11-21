@@ -38,8 +38,12 @@
         <div class="c3"><label>インボイス登録番号</label><input name="invoiceNo" placeholder="T + 13桁"></div>
 
         <div class="c6"><label>摘要<span class="req"></span></label><input name="description" required placeholder="例：名刺印刷 200部（送料込）"></div>
-        <div class="c3"><label>申請書予算項目</label><select name="budgetItem"></select></div>
         <div class="c3"><label>資金原資</label><select name="fund"></select></div>
+        <div class="c3"></div>
+
+        <div class="c4"><label>予算大項目</label><select name="bl1" id="bl1"></select></div>
+        <div class="c4"><label>予算中項目</label><select name="bl2" id="bl2"></select></div>
+        <div class="c4"><label>予算小項目</label><select name="bl3" id="bl3"></select><div class="hint" id="budgetHint">予算管理スプレッドシートの最新版から選択。選ぶと実績が予算対比に集計されます</div></div>
 
         <div class="c3"><label>証憑番号</label><input name="voucherNo" placeholder="領収書・請求書番号"></div>
         <div class="c3"><label>入力者</label><input name="enteredBy"></div>
@@ -107,7 +111,7 @@
   f.taxRate.addEventListener('change', calcTax);
   ['change', 'input'].forEach(ev => f.addEventListener(ev, refreshSummary));
 
-  $('#clearBtn').addEventListener('click', () => { const keep = { date: f.date.value, source: f.source.value, enteredBy: f.enteredBy.value }; f.reset(); f.date.value = keep.date; f.source.value = keep.source; f.enteredBy.value = keep.enteredBy; picker.clear(); refreshSummary(); });
+  $('#clearBtn').addEventListener('click', () => { const keep = { date: f.date.value, source: f.source.value, enteredBy: f.enteredBy.value }; f.reset(); f.date.value = keep.date; f.source.value = keep.source; f.enteredBy.value = keep.enteredBy; picker.clear(); if (bp) bp.reset(); refreshAccounts(); refreshSummary(); });
 
   f.addEventListener('submit', async e => {
     e.preventDefault();
@@ -118,6 +122,7 @@
       const data = Object.fromEntries(new FormData(f).entries());
       data.kind = kind;
       data.amount = toInt(data.amount);
+      Object.assign(data, bp ? bp.value() : {}); delete data.bl1; delete data.bl2; delete data.bl3;
       data.files = await picker.read();
       const res = await run('submitTransaction', data);
       toast('登録しました：' + res.id + '\n（借方）' + res.debit + ' ／（貸方）' + res.credit + '　' + yen(res.amount)
@@ -128,12 +133,25 @@
     } finally { busy(btn, false); }
   });
 
+  let bp = null;
+  runBudget('getBudgetItems').then(b => {
+    bp = BudgetPicker({ l1: $('#bl1'), l2: $('#bl2'), l3: $('#bl3') }, b.items);
+    if (b.version) $('#budgetHint').textContent = '予算「' + b.version + '」から選択。選ぶと実績が予算対比に集計されます';
+    $('#bl3').addEventListener('change', () => {
+      const it = bp.item(); if (!it) return;
+      if (it.fund && !f.fund.value) f.fund.value = it.fund;
+      if (it.account && kind === '支払' && !f.account.value) {
+        if (![...f.account.options].some(o => o.value === it.account)) { $('#allAcct').checked = true; refreshAccounts(); }
+        f.account.value = it.account; refreshSummary();
+      }
+    });
+  }).catch(err => toast('予算項目を読み込めませんでした\n' + esc(err.message || err), true));
+
   run('getMasters').then(m => {
     M = m;
     f.date.value = m.today;
     f.enteredBy.value = m.user || '';
     fillSelect(f.source, m.sources, { label: s => s.name + '（' + s.account + '）' });
-    fillSelect(f.budgetItem, m.budgets, { placeholder: '（任意）' });
     fillSelect(f.fund, m.funds, { placeholder: '（任意）' });
     refreshAccounts();
   }).catch(err => toast('マスタを読み込めませんでした\n' + esc(err.message || err), true));

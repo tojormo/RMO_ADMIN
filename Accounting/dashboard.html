@@ -58,9 +58,18 @@
     </div>
   </div>
 
-  <div class="card">
-    <h2>Budget<b>申請書予算項目別 予算対比（費用・税込）</b></h2>
-    <table id="budget"></table>
+  <div class="card" id="budgetCard">
+    <h2>Budget<b>予算対比（予算大項目・中項目・小項目／費用・税込）</b></h2>
+    <div class="btb">
+      <div class="grp"><span class="fl">表示する予算</span><div class="chips" id="verBtns"></div></div>
+      <div class="grp"><span class="fl">階層</span>
+        <button type="button" class="chip" data-lv="1">大項目</button>
+        <button type="button" class="chip" data-lv="2">中項目まで</button>
+        <button type="button" class="chip" data-lv="3">小項目まで</button>
+      </div>
+    </div>
+    <div class="bnote" id="budgetNote"></div>
+    <div class="bwrap"><table class="btbl" id="budgetTbl"></table></div>
   </div>
 
   <div class="card">
@@ -148,24 +157,108 @@
       + head('費用') + items(d.pl.expense) + row('費用合計', d.pl.expenseTotal, 'total')
       + row('当期収支差額', d.pl.surplus, 'total') + '</tbody>';
 
-    $('#budget').innerHTML = '<thead><tr><th>予算項目</th><th class="num">予算</th><th class="num">実績</th><th class="num">残額</th><th>執行率</th></tr></thead><tbody>'
-      + d.budget.map(b => {
-          const rate = b.budget ? b.actual / b.budget : 0;
-          return '<tr><td>' + esc(b.name) + '</td><td class="num">' + fmt(b.budget) + '</td><td class="num">' + fmt(b.actual) + '</td><td class="num">' + fmt(b.budget - b.actual) + '</td>'
-            + '<td><div class="bar' + (rate > 1 ? ' over' : '') + '" title="' + (rate * 100).toFixed(1) + '%"><span style="width:' + Math.min(100, rate * 100) + '%"></span></div><span class="muted" style="font-size:11px">' + (b.budget ? (rate * 100).toFixed(1) + '%' : '予算なし') + '</span></td></tr>';
-        }).join('')
-      + (() => { const tb = d.budget.reduce((t, b) => t + b.budget, 0), ta = d.budget.reduce((t, b) => t + b.actual, 0);
-          return '<tr class="total"><td>合計</td><td class="num">' + fmt(tb) + '</td><td class="num">' + fmt(ta) + '</td><td class="num">' + fmt(tb - ta) + '</td><td>' + (tb ? (ta / tb * 100).toFixed(1) + '%' : '') + '</td></tr>'; })()
-      + '</tbody>';
-
     $('#recent').innerHTML = '<thead><tr><th>仕訳ID</th><th>日付</th><th>区分</th><th>借方</th><th>貸方</th><th class="num">金額</th><th>取引先・摘要</th><th>証憑</th></tr></thead><tbody>'
       + (d.recent.length ? d.recent.map(r => '<tr><td>' + esc(r.id) + '-' + r.line + '</td><td>' + r.date + '</td><td><span class="pill">' + esc(r.kind) + '</span></td><td>' + esc(r.debit) + '</td><td>' + esc(r.credit) + '</td><td class="num">' + fmt(r.amount) + '</td><td>' + esc(r.partner) + '<div class="muted" style="font-size:12px">' + esc(r.desc) + '</div></td><td>' + (r.url ? '<a href="' + esc(r.url) + '" target="_blank">開く</a>' : '') + '</td></tr>').join('')
         : '<tr><td colspan="8" class="muted">仕訳がありません</td></tr>') + '</tbody>';
   }
 
+  /* ===== 予算対比（予算 API） ===== */
+  const PREF = 'rmo_budget_view';
+  const pref = (() => { try { return JSON.parse(localStorage.getItem(PREF) || '{}'); } catch (e) { return {}; } })();
+  const savePref = () => { try { localStorage.setItem(PREF, JSON.stringify(pref)); } catch (e) {} };
+  let B = null;                       // 予算 API の結果
+  const collapsed = new Set(pref.collapsed || []);
+  let level = pref.level || 3;
+  let visible = null;                 // 表示する予算バージョン名
+
+  function buildTree(rep) {
+    const tree = [];
+    const find = (arr, name) => arr.find(n => n.name === name) || (arr.push({ name, children: [] }), arr[arr.length - 1]);
+    rep.items.forEach(i => find(find(tree, i.l1).children, i.l2).children.push(i));
+    rep.unassigned.forEach(u => {
+      if (u.level === 2) find(find(tree, u.l1).children, u.l2).children.push({ code: '', l3: '（小項目未設定）', budgets: {}, actual: u.actual, un: true });
+      else if (u.level === 1) find(find(tree, u.l1).children, '（中項目未設定）').children.push({ code: '', l3: '（小項目未設定）', budgets: {}, actual: u.actual, un: true });
+      else find(find(tree, '（予算項目未設定）').children, '（中項目未設定）').children.push({ code: '', l3: '（小項目未設定）', budgets: {}, actual: u.actual, un: true });
+    });
+    const sum = (node) => {
+      if (!node.children) return node;
+      node.budgets = {}; node.actual = 0;
+      node.children.forEach(c => { sum(c); node.actual += c.actual; Object.keys(c.budgets).forEach(v => node.budgets[v] = (node.budgets[v] || 0) + c.budgets[v]); });
+      return node;
+    };
+    tree.forEach(sum);
+    return tree;
+  }
+
+  function renderBudget() {
+    if (!B) return;
+    const vers = B.versions.map(v => v.name);
+    if (!visible) visible = (pref.visible || []).filter(v => vers.indexOf(v) >= 0);
+    if (!visible.length && vers.length) visible = vers.length > 1 ? [vers[0], vers[vers.length - 1]] : [vers[0]];
+    $('#verBtns').innerHTML = vers.length ? vers.map(v => '<button type="button" class="chip' + (visible.indexOf(v) >= 0 ? ' on' : '') + '" data-v="' + esc(v) + '">' + esc(v) + '</button>').join('')
+      : '<span class="muted">予算シートがありません</span>';
+    document.querySelectorAll('[data-lv]').forEach(b => b.classList.toggle('on', Number(b.dataset.lv) === level));
+    const shown = vers.filter(v => visible.indexOf(v) >= 0);
+    const base = shown[shown.length - 1] || null;
+    $('#budgetNote').textContent = (base ? '残額・執行率は「' + base + '」が基準です。' : '予算を1つ以上選ぶと残額・執行率を表示します。')
+      + '実績は ' + B.fiscalYear + '年度の会計Ledgerから集計（' + B.generatedAt + '）。行をクリックすると開閉できます。';
+
+    const tree = buildTree(B);
+    const cols = shown.map(v => '<th class="num">' + esc(v.replace('_', ' ')) + '</th>').join('');
+    let html = '<thead><tr><th>予算項目</th><th>コード</th>' + cols + '<th class="num act">実績</th>' + (base ? '<th class="num">残額</th><th class="rate">執行率</th>' : '') + '</tr></thead><tbody>';
+    const cells = n => {
+      const bud = base ? (n.budgets[base] || 0) : 0;
+      const rate = bud ? n.actual / bud : (n.actual ? Infinity : 0);
+      return shown.map(v => '<td class="num">' + (n.budgets[v] === undefined ? '<span class="muted">—</span>' : fmt(n.budgets[v])) + '</td>').join('')
+        + '<td class="num act">' + fmt(n.actual) + '</td>'
+        + (base ? '<td class="num' + (bud - n.actual < 0 ? ' ng' : '') + '">' + fmt(bud - n.actual) + '</td>'
+          + '<td class="rate"><div class="bar' + (rate > 1 ? ' over' : '') + '"><span style="width:' + Math.min(100, (isFinite(rate) ? rate : 1) * 100) + '%"></span></div><span class="muted" style="font-size:11px">' + (bud ? (rate * 100).toFixed(1) + '%' : (n.actual ? '予算なし' : '')) + '</span></td>' : '');
+    };
+    const tg = (key, has) => '<span class="tg' + (has ? '' : ' none') + '">' + (collapsed.has(key) ? '▸' : '▾') + '</span>';
+    tree.forEach(n1 => {
+      const k1 = '1|' + n1.name;
+      html += '<tr class="l1" data-k="' + esc(k1) + '"><td>' + (level > 1 ? tg(k1, true) : '') + esc(n1.name) + '</td><td></td>' + cells(n1) + '</tr>';
+      if (level < 2 || collapsed.has(k1)) return;
+      n1.children.forEach(n2 => {
+        const k2 = '2|' + n1.name + '|' + n2.name;
+        html += '<tr class="l2" data-k="' + esc(k2) + '"><td>' + (level > 2 ? tg(k2, true) : '<span class="tg none"></span>') + esc(n2.name) + '</td><td></td>' + cells(n2) + '</tr>';
+        if (level < 3 || collapsed.has(k2)) return;
+        n2.children.forEach(i => {
+          html += '<tr class="l3' + (i.un ? ' un' : '') + '"><td>' + esc(i.l3) + '</td><td class="muted">' + esc(i.code) + '</td>' + cells(i) + '</tr>';
+        });
+      });
+    });
+    const total = { budgets: {}, actual: 0 };
+    tree.forEach(n => { total.actual += n.actual; Object.keys(n.budgets).forEach(v => total.budgets[v] = (total.budgets[v] || 0) + n.budgets[v]); });
+    html += '<tr class="total"><td>合計</td><td></td>' + cells(total) + '</tr></tbody>';
+    $('#budgetTbl').innerHTML = html;
+  }
+
+  $('#verBtns').addEventListener('click', e => {
+    const v = e.target.dataset && e.target.dataset.v; if (!v) return;
+    const i = visible.indexOf(v);
+    if (i >= 0) visible.splice(i, 1); else visible.push(v);
+    pref.visible = visible.slice(); savePref(); renderBudget();
+  });
+  document.querySelectorAll('[data-lv]').forEach(b => b.addEventListener('click', () => {
+    level = Number(b.dataset.lv); collapsed.clear(); pref.level = level; pref.collapsed = []; savePref(); renderBudget();
+  }));
+  $('#budgetTbl').addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-k]'); if (!tr) return;
+    const k = tr.dataset.k;
+    if (tr.classList.contains('l1') && level < 2) return;
+    if (tr.classList.contains('l2') && level < 3) return;
+    collapsed.has(k) ? collapsed.delete(k) : collapsed.add(k);
+    pref.collapsed = Array.from(collapsed); savePref(); renderBudget();
+  });
+
   function load(fy) {
     $('#period').textContent = '読み込み中…';
-    run('getDashboardData', fy || null).then(render).catch(err => toast('データを読み込めませんでした\n' + esc(err.message || err), true));
+    run('getDashboardData', fy || null).then(d => {
+      render(d);
+      return runBudget('getBudgetReport', d.fiscalYear).then(rep => { B = rep; renderBudget(); })
+        .catch(err => { $('#budgetNote').textContent = '予算を読み込めませんでした：' + (err.message || err); });
+    }).catch(err => toast('データを読み込めませんでした\n' + esc(err.message || err), true));
   }
   $('#fy').addEventListener('change', e => load(Number(e.target.value)));
   $('#reload').addEventListener('click', () => load(Number($('#fy').value)));

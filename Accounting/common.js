@@ -2,6 +2,10 @@
 
 // GAS ウェブアプリ（/exec）の URL
 const API_URL = 'https://script.google.com/macros/s/AKfycbyEmlSmcJzUYnCUoAYA39Tl24d7Plqt7Puo6p6cfdS8XOokEv6ceJ9xLdNryeO7GSr4/exec';
+// 予算 API（予算管理スプレッドシートの GAS ウェブアプリ /exec）
+const BUDGET_API_URL = 'https://script.google.com/macros/s/AKfycbyooLm09B5XAY8BX5m5pFaG67BtAR11xTydbrrz34VRYIGp_5WtoQ4Vv2UijcIYSz1W/exec';
+// 予算管理（スプレッドシート）
+const BUDGET_URL = 'https://docs.google.com/spreadsheets/d/1gkrn6S4IaJ-pYIoMDXTzuuA2y_VT62RfX-JuA10Tmms/edit';
 // 会計Ledger（スプレッドシート）
 const LEDGER_URL = 'https://docs.google.com/spreadsheets/d/1EdBz2L4jN-4kU1XXIRJf4BzT-az6cfMmqCdMu_497EQ/edit';
 
@@ -28,17 +32,21 @@ function loading(on) {
   if (el) el.classList.toggle('on', pending > 0);
 }
 
-/** GAS API 呼び出し（GAS 上で開いた場合は google.script.run、それ以外は fetch） */
-function run(fn, ...args) {
+/** GAS API 呼び出し（会計 API）。GAS 上で開いた場合は google.script.run、それ以外は fetch */
+function run(fn, ...args) { return callApi(API_URL, fn, args); }
+/** 予算 API 呼び出し */
+function runBudget(fn, ...args) { return callApi(BUDGET_API_URL, fn, args); }
+
+function callApi(url, fn, args) {
   loading(true);
   const done = v => { loading(false); return v; };
   const fail = e => { loading(false); return Promise.reject(e); };
-  if (window.google && google.script && google.script.run) {
+  if (url === API_URL && window.google && google.script && google.script.run) {
     return new Promise((resolve, reject) =>
       google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).api(fn, args)).then(done, fail);
   }
-  if (!API_URL) return fail(new Error('common.js の API_URL が未設定です'));
-  return getKey().then(key => fetch(API_URL, {
+  if (!url || url.indexOf('__') === 0) return fail(new Error('common.js の API の URL が未設定です'));
+  return getKey().then(key => fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action: fn, args: args, key: key }),
@@ -47,7 +55,7 @@ function run(fn, ...args) {
     if (j.code === 'AUTH') {
       storeKey('');
       loading(false);
-      return askKey(j.error).then(() => run(fn, ...args));
+      return askKey(j.error).then(() => callApi(url, fn, args));
     }
     return fail(new Error(j.error));
   }, fail);
@@ -90,6 +98,7 @@ function renderChrome() {
   h.innerHTML = '<div class="brand"><div class="eyebrow">TOJO RMO Accounting System</div><div class="ttl">' + cur[3] + '</div></div><nav>'
     + PAGES.map(p => '<a class="txtbtn' + (p[0] === page ? ' on' : '') + '" href="' + p[1] + '" title="' + p[3] + '">' + p[2] + '</a>').join('')
     + '<span class="sep"></span><a class="txtbtn" href="' + LEDGER_URL + '" target="_blank" rel="noopener" title="会計Ledger（スプレッドシート）">Ledger ↗</a>'
+    + '<a class="txtbtn" href="' + BUDGET_URL + '" target="_blank" rel="noopener" title="予算管理（スプレッドシート）">Budget ↗</a>'
     + '<button class="txtbtn" id="btnLogout" type="button" title="保存したパスコードを消去">Logout</button></nav>';
   document.body.prepend(h);
   document.body.prepend(bar);
@@ -148,3 +157,34 @@ function FilePicker(dropEl, inputEl, listEl, previewEl) {
 }
 
 function busy(btn, on) { btn.disabled = on; btn.classList.toggle('is-busy', on); }
+
+/**
+ * 予算項目の連動プルダウン（大項目 → 中項目 → 小項目）
+ * sels: {l1, l2, l3} の select 要素。items: 予算 API getBudgetItems().items
+ */
+function BudgetPicker(sels, items) {
+  const uniq = arr => arr.filter((v, i) => v && arr.indexOf(v) === i);
+  const opt = (sel, list, ph) => {
+    sel.innerHTML = '<option value="">' + ph + '</option>' + list.map(o => '<option value="' + esc(o.v) + '">' + esc(o.t) + '</option>').join('');
+  };
+  const fill1 = () => opt(sels.l1, uniq(items.map(i => i.l1)).map(v => ({ v, t: v })), '（任意）大項目を選択');
+  const fill2 = () => {
+    const l1 = sels.l1.value;
+    opt(sels.l2, uniq(items.filter(i => !l1 || i.l1 === l1).map(i => i.l2)).map(v => ({ v, t: v })), l1 ? '中項目を選択' : '（大項目を先に選択）');
+    sels.l2.disabled = !l1;
+  };
+  const fill3 = () => {
+    const l1 = sels.l1.value, l2 = sels.l2.value;
+    opt(sels.l3, items.filter(i => i.l1 === l1 && i.l2 === l2).map(i => ({ v: i.code, t: i.l3 + '（' + i.code + '）' })), l2 ? '小項目を選択' : '（中項目を先に選択）');
+    sels.l3.disabled = !l2;
+  };
+  sels.l1.addEventListener('change', () => { fill2(); fill3(); });
+  sels.l2.addEventListener('change', fill3);
+  const reset = () => { fill1(); fill2(); fill3(); };
+  reset();
+  return {
+    reset,
+    value: () => ({ budgetItem: sels.l2.value || sels.l1.value || '', budgetCode: sels.l3.value || '' }),
+    item: () => items.find(i => i.code === sels.l3.value) || null,
+  };
+}

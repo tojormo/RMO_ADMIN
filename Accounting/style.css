@@ -159,3 +159,32 @@ tr.pad td{border-bottom-color:transparent}
 tr.total td{border-bottom:2px solid var(--ink)}
 .bs-grid td{height:38px;padding-top:0;padding-bottom:0}
 tr.sub td{color:var(--ink)}
+
+/* ===== 予算対比（Gantt の LV 表示に準拠） ===== */
+.btb{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center;margin-bottom:12px}
+.btb .grp{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fl{font-size:9px;font-weight:600;letter-spacing:.2em;color:var(--mute);margin-right:4px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{height:32px;padding:0 12px;border:1px solid var(--hair2);background:var(--paper);color:var(--ink2);font-size:12px;font-weight:600;letter-spacing:.04em;display:inline-flex;align-items:center;gap:6px}
+.chip::before{content:"";width:12px;height:12px;border:1px solid var(--ink2);background:var(--paper)}
+.chip.on{border-color:var(--ink);background:var(--ink);color:var(--paper)}
+.chip.on::before{background:var(--paper);box-shadow:inset 0 0 0 3px var(--ink);border-color:var(--paper)}
+.chip:hover:not(.on){border-color:var(--ink);background:var(--tint)}
+.bnote{font-size:11px;color:var(--mute);margin-bottom:8px;letter-spacing:.02em}
+.bwrap{overflow-x:auto}
+.btbl{min-width:760px}
+.btbl th,.btbl td{white-space:nowrap}
+.btbl td:first-child{white-space:normal;min-width:220px}
+.btbl th.act,.btbl td.act{background:#f7f9fd;font-weight:700}
+.btbl .rate{width:150px}
+.btbl tr[data-k]{cursor:pointer}
+.btbl tr.l1 td{font-weight:900;font-size:13.5px;border-top:1px solid var(--ink);background-color:var(--tint);background-image:repeating-linear-gradient(-45deg,rgba(11,42,91,.06) 0 1.5px,transparent 1.5px 6px)}
+.btbl tr.l1 td.act{background-image:none}
+.btbl tr.l2 td{font-weight:700;color:var(--ink2)}
+.btbl tr.l2 td:first-child{padding-left:22px}
+.btbl tr.l3 td{font-size:12.5px;color:var(--ink2)}
+.btbl tr.l3 td:first-child{padding-left:56px}
+.btbl tr.un td:first-child{color:var(--accent)}
+.btbl tr[data-k]:hover td{background-color:#e9f0fb}
+.btbl .tg{display:inline-block;width:18px;font-size:10px;color:var(--ink)}
+.btbl .tg.none{visibility:hidden}

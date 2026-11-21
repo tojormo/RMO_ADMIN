@@ -12,7 +12,6 @@ const SHEETS = {
   LEDGER: '仕訳帳',
   ACCOUNTS: '勘定科目マスタ',
   SOURCES: '支払元マスタ',
-  BUDGETS: '予算項目マスタ',
   SETTINGS: '設定',
 };
 
@@ -22,9 +21,9 @@ const COL = {
   DR_ACCT: 7, DR_AMT: 8, CR_ACCT: 9, CR_AMT: 10,
   TAX_RATE: 11, TAX_AMT: 12, PARTNER: 13, INVOICE: 14, DESC: 15,
   BUDGET: 16, FUND: 17, VOUCHER_NO: 18, VOUCHER_URL: 19,
-  USER: 20, CREATED: 21, STATUS: 22,
+  USER: 20, CREATED: 21, STATUS: 22, BUDGET_CODE: 23,
 };
-const LEDGER_WIDTH = 22;
+const LEDGER_WIDTH = 23;
 const TZ = 'Asia/Tokyo';
 
 /* ========== Web API（HTML は GitHub: RMO_ADMIN/Accounting 側） ========== */
@@ -125,6 +124,7 @@ function getSettings_() {
     startMonth: Number(map['期首月']) || 4,
     fiscalYear: Number(map['対象会計年度']) || null,
     voucherFolderId: String(map['証憑フォルダID'] || '').trim(),
+    funds: String(map['資金原資'] || 'RMO交付金,自己資金,要確認').split(/[,、，]/).map(s => s.trim()).filter(String),
     idPrefix: String(map['仕訳ID接頭辞'] || 'J'),
   };
 }
@@ -165,14 +165,9 @@ function getSources_() {
     .map(r => ({ name: String(r[0]), account: String(r[1]), kind: String(r[2]), memo: String(r[3] || '') }));
 }
 
-function getBudgets_() {
-  return rows_(SHEETS.BUDGETS)
-    .filter(r => r[0] !== '' && isTrue_(r[2]))
-    .map(r => ({ name: String(r[0]), amount: Number(r[1]) || 0 }));
-}
-
+/** 資金原資の選択肢（設定タブ「資金原資」をカンマ区切りで） */
 function getFunds_() {
-  return rows_(SHEETS.BUDGETS).map(r => String(r[5] || '')).filter(String);
+  return getSettings_().funds;
 }
 
 /** 入力画面の初期データ */
@@ -182,7 +177,6 @@ function getMasters() {
   return {
     accounts: getAccounts_(),
     sources: getSources_(),
-    budgets: getBudgets_().map(b => b.name),
     funds: getFunds_(),
     today: Utilities.formatDate(today, TZ, 'yyyy-MM-dd'),
     fiscalYear: s.fiscalYear || fiscalYearOf_(today, s.startMonth),
@@ -236,7 +230,8 @@ function saveVouchers_(files, journalId, date, partner) {
 /**
  * 支払・収入の登録
  * payload: {kind:'支払'|'収入', date, source, account, amount, taxRate, taxAmount,
- *           partner, invoiceNo, description, budgetItem, fund, voucherNo, enteredBy, files:[{name,mimeType,data}]}
+ *           partner, invoiceNo, description, budgetItem, budgetCode, fund, voucherNo, enteredBy, files:[{name,mimeType,data}]}
+ * budgetItem: 予算中項目名（申請書予算項目列）／budgetCode: 予算小項目のコード（予算管理スプレッドシート）
  */
 function submitTransaction(payload) {
   const p = payload || {};
@@ -289,6 +284,7 @@ function submitTransaction(payload) {
     row[COL.USER - 1] = p.enteredBy || Session.getActiveUser().getEmail();
     row[COL.CREATED - 1] = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
     row[COL.STATUS - 1] = '有効';
+    row[COL.BUDGET_CODE - 1] = p.budgetCode || '';
     appendLedger_([row]);
     return { id: id, urls: urls, debit: row[COL.DR_ACCT - 1], credit: row[COL.CR_ACCT - 1], amount: amount };
   } finally {
@@ -354,6 +350,7 @@ function submitJournal(payload) {
       row[COL.USER - 1] = p.enteredBy || Session.getActiveUser().getEmail();
       row[COL.CREATED - 1] = created;
       row[COL.STATUS - 1] = '有効';
+      row[COL.BUDGET_CODE - 1] = p.budgetCode || '';
       return row;
     });
     appendLedger_(rows);
@@ -366,7 +363,7 @@ function submitJournal(payload) {
 /* ========== ダッシュボード ========== */
 
 /**
- * Ledger を読んで BS / PL / 月次推移 / 予算対比 を返す
+ * Ledger を読んで BS / PL / 月次推移 を返す（予算対比は予算 API 側）
  * @param {number} fy 会計年度（省略時は設定値）
  */
 function getDashboardData(fy) {
@@ -391,7 +388,6 @@ function getDashboardData(fy) {
   months.forEach(m => monthly[m] = { revenue: 0, expense: 0, cashDelta: 0 });
   let cashOpening = 0;
 
-  const budgetActual = {};
   const years = new Set();
   const unknown = new Set();
   const journalBalance = {};
@@ -423,10 +419,6 @@ function getDashboardData(fy) {
           if (a.type === '収益') monthly[month].revenue += x.dr ? -x.amt : x.amt;
           if (a.type === '費用') monthly[month].expense += x.dr ? x.amt : -x.amt;
           if (cashAccounts.indexOf(a.name) >= 0) monthly[month].cashDelta += x.dr ? x.amt : -x.amt;
-        }
-        if (a.type === '費用') {
-          const b = String(r[COL.BUDGET - 1] || '（未設定）');
-          budgetActual[b] = (budgetActual[b] || 0) + (x.dr ? x.amt : -x.amt);
         }
       }
       if (rowFy < fy && cashAccounts.indexOf(a.name) >= 0) cashOpening += x.dr ? x.amt : -x.amt;
@@ -464,12 +456,6 @@ function getDashboardData(fy) {
     return { month: m, revenue: monthly[m].revenue, expense: monthly[m].expense, cash: running };
   });
 
-  const budgets = getBudgets_();
-  const budgetRows = budgets.map(b => ({ name: b.name, budget: b.amount, actual: budgetActual[b.name] || 0 }));
-  Object.keys(budgetActual).forEach(k => {
-    if (!budgets.find(b => b.name === k)) budgetRows.push({ name: k, budget: 0, actual: budgetActual[k] });
-  });
-
   const unbalanced = Object.keys(journalBalance).filter(k => journalBalance[k] !== 0);
   years.add(fy);
 
@@ -486,7 +472,6 @@ function getDashboardData(fy) {
     },
     pl: { revenue: revenue, expense: expense, revenueTotal: revenueTotal, expenseTotal: expenseTotal, surplus: surplus },
     monthly: monthlyArr,
-    budget: budgetRows,
     recent: recent.slice(-15).reverse(),
     warnings: {
       unbalanced: unbalanced,
