@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TOJO RMO Accounting System | ダッシュボード</title>
+  <title>とうじょうRMO会計システム | ダッシュボード</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -90,7 +90,7 @@
   const baseOpts = (extra) => Object.assign({
     responsive: true, maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + '：' + yen(ctx.parsed.y ?? ctx.parsed.x) } } },
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + '：' + yen(ctx.chart.options.indexAxis === 'y' ? ctx.parsed.x : ctx.parsed.y) } } },
     scales: {
       x: { grid: { display: false } },
       y: { grid: { color: C.grid }, border: { display: false }, ticks: { callback: v => fmt(v) } },
@@ -121,6 +121,7 @@
       ['当期収支差額', d.pl.surplus, '収益 − 費用'],
     ];
     $('#kpis').innerHTML = k.map(x => '<div class="stat' + (x[1] < 0 ? ' alert' : '') + '"><div class="l">' + x[0] + '</div><div class="n">' + yen(x[1]) + '</div><div class="s">' + x[2] + '</div></div>').join('');
+
 
     const labels = d.monthly.map(m => Number(m.month.slice(5)) + '月');
     draw('cMonthly', { type: 'bar', data: { labels, datasets: [

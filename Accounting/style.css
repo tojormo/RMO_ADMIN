@@ -1,4 +1,4 @@
-/* TOJO RMO Accounting System — RMO Gantt（WBS Timeline）と同じデザイン言語 */
+/* とうじょうRMO会計システム — RMO Gantt（WBS Timeline）と同じデザイン言語 */
 :root{
   --ink:#0b2a5b; --ink2:#2b4a7a; --mute:#7a8fae; --hair:#dfe7f3; --hair2:#c3d2e8; --paper:#ffffff; --tint:#f2f6fc;
   --lv1:#1e4fa3; --lv2:#5b8bd6; --lv3:#b3cdf0;
@@ -200,3 +200,5 @@ tr.sub td{color:var(--ink)}
 .tile:hover .go{transform:translateX(4px)}
 .tile.ext{border-top-color:var(--lv2);background:var(--tint)}
 .tile.ext:hover{background:var(--ink2)}
+label .auto{display:inline-block;margin-left:6px;padding:0 5px;background:var(--key);color:var(--paper);font-size:9px;font-weight:700;letter-spacing:.08em;line-height:1.6;vertical-align:1px}
+select:disabled{background:var(--paper);border-style:dashed;color:var(--ink);opacity:1;cursor:not-allowed}

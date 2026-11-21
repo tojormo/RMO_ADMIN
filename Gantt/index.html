@@ -35,6 +35,7 @@ button{cursor:pointer}
 .txtbtn{background:none;border:0;padding:6px 0;font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink);position:relative}
 .txtbtn::after{content:"";position:absolute;left:0;right:100%;bottom:2px;height:1px;background:var(--ink);transition:right .25s}
 .txtbtn:hover::after,.txtbtn.on::after{right:0}
+a.txtbtn{text-decoration:none;display:inline-block}
 .hd nav{display:flex;gap:18px;margin-left:auto}
 
 /* ===== KPI ===== */
@@ -221,6 +222,7 @@ button{cursor:pointer}
     </div>
     <div class="stats" id="stats"></div>
     <nav>
+      <a class="txtbtn" id="lnkSheet" href="#" target="_blank" rel="noopener" title="ソースのスプレッドシートを開く" hidden>Sheet ↗</a>
       <button class="txtbtn" id="btnReload">Reload</button>
       <button class="txtbtn" id="btnLogout">Logout</button>
     </nav>
@@ -277,6 +279,8 @@ button{cursor:pointer}
 <script>
 /* 外部ホスティング時のみ GASウェブアプリURL(/exec) を設定。GASから開く場合は空のまま */
 const API_URL = 'https://script.google.com/macros/s/AKfycbxz9LsWMF19uylm_T7s3-150QOUiMbcUg98UxoVwD9H8-zPWDxdypJplFYwXVIELGU3hA/exec';
+/* ソースのスプレッドシートURL（GASが url を返さない場合のフォールバック。空ならリンク非表示） */
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Ksgl1i1hlfgogvbuudsI0Xnx36sDnWzsudFMHMAKoxY/edit';
 const PW_KEY = 'gantt_pw', PREF_KEY = 'gantt_prefs_v4';
 const DAY = 86400000;
 const ZOOMS = { day: 28, week: 10, month: 3.5 };
@@ -359,6 +363,8 @@ async function fetchData(pw) {
     hideLogin();
     $('title').textContent = res.title || 'Timeline';
     document.title = res.title || 'WBS Timeline';
+    const sheetUrl = res.url ? res.url + (res.gid != null ? '#gid=' + res.gid : '') : SHEET_URL;
+    $('lnkSheet').href = sheetUrl || '#'; $('lnkSheet').hidden = !sheetUrl;
     buildTree(tasks);
     $('updated').textContent = 'Updated ' + res.updatedAt;
     buildFilterOptions();

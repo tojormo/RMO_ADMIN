@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TOJO RMO Accounting System | 支払・収入入力</title>
+  <title>とうじょうRMO会計システム | 支払・収入入力</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -38,7 +38,7 @@
         <div class="c3"><label>インボイス登録番号</label><input name="invoiceNo" placeholder="T + 13桁"></div>
 
         <div class="c6"><label>摘要<span class="req"></span></label><input name="description" required placeholder="例：名刺印刷 200部（送料込）"></div>
-        <div class="c3"><label>資金原資</label><select name="fund"></select></div>
+        <div class="c3"><label id="fundLabel">資金原資<span class="req"></span></label><select name="fund" id="fund"></select><div class="hint" id="fundHint">支出の財源（RMO交付金／自己資金）</div></div>
         <div class="c3"></div>
 
         <div class="c4"><label>予算大項目</label><select name="bl1" id="bl1"></select></div>
@@ -56,7 +56,7 @@
       <input type="file" id="fileInput" multiple accept="image/*,application/pdf" hidden>
       <ul class="files" id="fileList"></ul>
       <div class="preview" id="preview"></div>
-      <div class="hint">証憑は Drive の「TOJO RMO Accounting System／証憑／年-月」フォルダに保存され、Ledger に URL が記録されます。</div>
+      <div class="hint">証憑は Drive の「とうじょうRMO会計システム／証憑／年-月」フォルダに保存され、Ledger に URL が記録されます。</div>
     </div>
 
     <div class="card">
@@ -81,6 +81,20 @@
     const all = $('#allAcct').checked;
     const list = M.accounts.filter(a => all ? a.usage !== '支払元' : (a.usage === kind));
     fillSelect(f.account, list, { groupBy: all ? 'type' : null, label: a => a.code + ' ' + a.name });
+    refreshFund();
+  }
+  /** 資金原資：支出は選択（必須）、収入は科目の資金区分で自動（RMO交付金収入→RMO交付金、事業収入→自己資金） */
+  function refreshFund() {
+    const acct = M && M.accounts.find(a => a.name === f.account.value);
+    const auto = kind === '収入' && acct && acct.fundClass;
+    const need = acct ? acct.type === '費用' : kind === '支払';
+    if (auto) f.fund.value = acct.fundClass;
+    f.fund.disabled = !!auto;
+    f.fund.required = need;
+    $('#fundLabel').innerHTML = '資金原資' + (need ? '<span class="req"></span>' : '') + (auto ? '<span class="auto">自動</span>' : '');
+    $('#fundHint').textContent = auto ? '収入科目「' + acct.name + '」は' + acct.fundClass + 'に分類されます'
+      : kind === '収入' ? '収入はRMO交付金収入（→RMO交付金）か事業収入（→自己資金）を選ぶと自動で分類されます'
+      : '支出の財源（' + (M ? M.funds.join('／') : '') + '）';
   }
   function refreshSummary() {
     const amt = toInt(f.amount.value);
@@ -106,6 +120,7 @@
     refreshAccounts(); refreshSummary();
   }));
   $('#allAcct').addEventListener('change', refreshAccounts);
+  f.account.addEventListener('change', refreshFund);
   f.amount.addEventListener('input', calcTax);
   f.amount.addEventListener('blur', () => { const n = toInt(f.amount.value); if (n > 0) f.amount.value = n.toLocaleString('ja-JP'); });
   f.taxRate.addEventListener('change', calcTax);
@@ -122,6 +137,7 @@
       const data = Object.fromEntries(new FormData(f).entries());
       data.kind = kind;
       data.amount = toInt(data.amount);
+      data.fund = f.fund.value;
       Object.assign(data, bp ? bp.value() : {}); delete data.bl1; delete data.bl2; delete data.bl3;
       data.files = await picker.read();
       const res = await run('submitTransaction', data);
@@ -139,11 +155,11 @@
     if (b.version) $('#budgetHint').textContent = '予算「' + b.version + '」から選択。選ぶと実績が予算対比に集計されます';
     $('#bl3').addEventListener('change', () => {
       const it = bp.item(); if (!it) return;
-      if (it.fund && !f.fund.value) f.fund.value = it.fund;
       if (it.account && kind === '支払' && !f.account.value) {
         if (![...f.account.options].some(o => o.value === it.account)) { $('#allAcct').checked = true; refreshAccounts(); }
-        f.account.value = it.account; refreshSummary();
+        f.account.value = it.account; refreshFund(); refreshSummary();
       }
+      if (it.fund && !f.fund.value && !f.fund.disabled && [...f.fund.options].some(o => o.value === it.fund)) f.fund.value = it.fund;
     });
   }).catch(err => toast('予算項目を読み込めませんでした\n' + esc(err.message || err), true));
 
@@ -152,7 +168,7 @@
     f.date.value = m.today;
     f.enteredBy.value = m.user || '';
     fillSelect(f.source, m.sources, { label: s => s.name + '（' + s.account + '）' });
-    fillSelect(f.fund, m.funds, { placeholder: '（任意）' });
+    fillSelect(f.fund, m.funds, { placeholder: '選択してください' });
     refreshAccounts();
   }).catch(err => toast('マスタを読み込めませんでした\n' + esc(err.message || err), true));
 </script>

@@ -1,6 +1,6 @@
 /**
- * TOJO RMO Accounting System — 予算 API
- * - 予算: スプレッドシート「TOJO RMO 予算管理」（シート名「当初予算_YYYY-MM-DD」「改訂予算_YYYY-MM-DD」）
+ * とうじょうRMO会計システム — 予算 API
+ * - 予算: スプレッドシート「とうじょうRMO会計システム 予算管理」（シート名「当初予算_YYYY-MM-DD」「改訂予算_YYYY-MM-DD」）
  * - 実績: 会計Ledger の仕訳帳から集計（費用科目のみ）
  * - 画面（HTML）: GitHub tojormo/RMO_ADMIN の Accounting フォルダ
  */
@@ -27,7 +27,7 @@ const API_ACTIONS = {
 };
 
 function doGet(e) {
-  return json_({ ok: true, data: { service: 'TOJO RMO Budget API', time: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss') } });
+  return json_({ ok: true, data: { service: 'とうじょうRMO会計システム 予算API', time: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss') } });
 }
 
 /** POST {action, args:[...], key}（Content-Type: text/plain） */

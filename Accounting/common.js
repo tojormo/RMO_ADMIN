@@ -1,4 +1,4 @@
-/* TOJO RMO Accounting System 共通スクリプト（デザインは RMO Gantt に準拠） */
+/* とうじょうRMO会計システム 共通スクリプト（デザインは RMO Gantt に準拠） */
 
 // GAS ウェブアプリ（/exec）の URL
 const API_URL = 'https://script.google.com/macros/s/AKfycbyEmlSmcJzUYnCUoAYA39Tl24d7Plqt7Puo6p6cfdS8XOokEv6ceJ9xLdNryeO7GSr4/exec';
@@ -95,7 +95,7 @@ function renderChrome() {
   const bar = document.createElement('div'); bar.className = 'loading'; bar.id = 'loading'; bar.innerHTML = '<i></i>';
   const h = document.createElement('header');
   h.className = 'hd';
-  h.innerHTML = '<div class="brand"><div class="eyebrow">TOJO RMO Accounting System</div><div class="ttl">' + cur[3] + '</div></div><nav>'
+  h.innerHTML = '<div class="brand"><div class="eyebrow">とうじょうRMO会計システム</div><div class="ttl">' + cur[3] + '</div></div><nav>'
     + PAGES.map(p => '<a class="txtbtn' + (p[0] === page ? ' on' : '') + '" href="' + p[1] + '" title="' + p[3] + '">' + p[2] + '</a>').join('')
     + '<span class="sep"></span><a class="txtbtn" href="' + LEDGER_URL + '" target="_blank" rel="noopener" title="会計Ledger（スプレッドシート）">Ledger ↗</a>'
     + '<a class="txtbtn" href="' + BUDGET_URL + '" target="_blank" rel="noopener" title="予算管理（スプレッドシート）">Budget ↗</a>'

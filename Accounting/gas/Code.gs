@@ -1,5 +1,5 @@
 /**
- * TOJO RMO Accounting System（支払基準）
+ * とうじょうRMO会計システム（支払基準）
  * - 支払・収入入力（証憑添付） / 仕訳直接入力 / BS・PL ダッシュボード の API
  * - Ledger: スプレッドシート「会計Ledger」
  * - 画面（HTML）: GitHub tojormo/RMO_ADMIN の Accounting フォルダ
@@ -38,7 +38,7 @@ const API_ACTIONS = {
 
 /** 動作確認用（ブラウザで /exec を開くと応答を返す） */
 function doGet(e) {
-  return json_({ ok: true, data: { service: 'TOJO RMO Accounting API', time: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss') } });
+  return json_({ ok: true, data: { service: 'とうじょうRMO会計システム 会計API', time: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss') } });
 }
 
 /**
@@ -156,7 +156,7 @@ function calcTax_(amountInclTax, rate) {
 function getAccounts_() {
   return rows_(SHEETS.ACCOUNTS)
     .filter(r => r[1] !== '' && isTrue_(r[5]))
-    .map(r => ({ code: String(r[0]), name: String(r[1]), type: String(r[2]), side: String(r[3]), usage: String(r[4]), note: String(r[6] || '') }));
+    .map(r => ({ code: String(r[0]), name: String(r[1]), type: String(r[2]), side: String(r[3]), usage: String(r[4]), note: String(r[6] || ''), fundClass: String(r[7] || '') }));
 }
 
 function getSources_() {
@@ -178,6 +178,7 @@ function getMasters() {
     accounts: getAccounts_(),
     sources: getSources_(),
     funds: getFunds_(),
+    fundRule: '費用の支払は資金原資（' + getFunds_().join('／') + '）を選択。収入は科目で決まります（RMO交付金収入→RMO交付金、事業収入→自己資金）',
     today: Utilities.formatDate(today, TZ, 'yyyy-MM-dd'),
     fiscalYear: s.fiscalYear || fiscalYearOf_(today, s.startMonth),
     user: Session.getActiveUser().getEmail() || '',
@@ -248,6 +249,11 @@ function submitTransaction(payload) {
   if (!src) errors.push((p.kind === '収入' ? '入金先' : '支払元') + 'を選んでください');
   else if (!accounts.find(a => a.name === src.account)) errors.push('支払元マスタの勘定科目「' + src.account + '」が勘定科目マスタにありません');
   if (!String(p.description || '').trim()) errors.push('摘要を入力してください');
+  // 資金原資：収入は科目の資金区分（RMO交付金収入→RMO交付金、事業収入→自己資金）、費用の支払は必須
+  const funds = getSettings_().funds;
+  if (acct && p.kind === '収入' && acct.fundClass) p.fund = acct.fundClass;
+  if (acct && acct.type === '費用' && !p.fund) errors.push('資金原資（' + funds.join('／') + '）を選んでください');
+  if (p.fund && funds.indexOf(p.fund) < 0) errors.push('資金原資「' + p.fund + '」は設定タブの選択肢にありません');
   if (errors.length) throw new Error(errors.join('\n'));
 
   let tax = toInt_(p.taxAmount);
@@ -392,6 +398,7 @@ function getDashboardData(fy) {
   const unknown = new Set();
   const journalBalance = {};
   const recent = [];
+  const fundSum = {};   // 資金原資別 { fund: { rev, exp, cumRev, cumExp } }
 
   rows_(SHEETS.LEDGER).forEach(r => {
     if (!r[COL.ID - 1] || String(r[COL.STATUS - 1]) === '取消') return;
@@ -422,6 +429,13 @@ function getDashboardData(fy) {
         }
       }
       if (rowFy < fy && cashAccounts.indexOf(a.name) >= 0) cashOpening += x.dr ? x.amt : -x.amt;
+      if ((a.type === '収益' || a.type === '費用') && rowFy <= fy) {
+        const f = String(r[COL.FUND - 1] || a.fundClass || '（未設定）');
+        const o = fundSum[f] = fundSum[f] || { rev: 0, exp: 0, cumRev: 0, cumExp: 0 };
+        const v = a.type === '収益' ? (x.dr ? -x.amt : x.amt) : (x.dr ? x.amt : -x.amt);
+        if (a.type === '収益') { o.cumRev += v; if (rowFy === fy) o.rev += v; }
+        else { o.cumExp += v; if (rowFy === fy) o.exp += v; }
+      }
     });
 
     if (rowFy === fy) {
@@ -458,6 +472,11 @@ function getDashboardData(fy) {
 
   const unbalanced = Object.keys(journalBalance).filter(k => journalBalance[k] !== 0);
   years.add(fy);
+  const fundOrder = s.funds.concat(Object.keys(fundSum).filter(f => s.funds.indexOf(f) < 0));
+  const funds = fundOrder.filter(f => s.funds.indexOf(f) >= 0 || fundSum[f]).map(f => {
+    const o = fundSum[f] || { rev: 0, exp: 0, cumRev: 0, cumExp: 0 };
+    return { fund: f, revenue: o.rev, expense: o.exp, balance: o.rev - o.exp, cumRevenue: o.cumRev, cumExpense: o.cumExp, cumBalance: o.cumRev - o.cumExp, known: s.funds.indexOf(f) >= 0 };
+  });
 
   return {
     fiscalYear: fy,
@@ -472,6 +491,7 @@ function getDashboardData(fy) {
     },
     pl: { revenue: revenue, expense: expense, revenueTotal: revenueTotal, expenseTotal: expenseTotal, surplus: surplus },
     monthly: monthlyArr,
+    funds: funds,
     recent: recent.slice(-15).reverse(),
     warnings: {
       unbalanced: unbalanced,
