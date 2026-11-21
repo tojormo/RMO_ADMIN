@@ -42,11 +42,14 @@ GAS を変えずに済むように、API は次のように作っています。
 
 ### Google 側（admin@tojormo.com 所有）
 
+GAS と HTML はファイル・フォルダを **ID で参照** しているため、Drive 上の名前は自由に変えて構いません。変えてはいけないのは、スプレッドシート内のシート名（仕訳帳・設定・「〜マスタ」・`当初予算_`/`改訂予算_` で始まる予算シート）と列の見出し名です。
+
 | 種類 | 名前 | ID / URL |
 |---|---|---|
-| Drive フォルダ | とうじょうRMO会計システム | `1g2uPKxjCqcPpkhAJjQP9WKlUSuHNvOu1` |
-| ├ スプレッドシート | とうじょうRMO会計システム 会計Ledger | `1EdBz2L4jN-4kU1XXIRJf4BzT-az6cfMmqCdMu_497EQ` |
-| ├ スプレッドシート | とうじょうRMO会計システム 予算管理 | `1gkrn6S4IaJ-pYIoMDXTzuuA2y_VT62RfX-JuA10Tmms` |
+| Drive フォルダ | Accounting System | `1g2uPKxjCqcPpkhAJjQP9WKlUSuHNvOu1` |
+| ├ スプレッドシート | 02_会計Ledger | `1EdBz2L4jN-4kU1XXIRJf4BzT-az6cfMmqCdMu_497EQ` |
+| ├ スプレッドシート | 01_予算管理 | `1gkrn6S4IaJ-pYIoMDXTzuuA2y_VT62RfX-JuA10Tmms` |
+| ├ ファイル | 運用マニュアル.md（運用メンバー向け） | `1Or08Pt51ee2NTMS4Silv9juyIHW1eeyF` |
 | └ フォルダ | 証憑（添付ファイルの保存先。`年-月` のサブフォルダを自動作成） | `1JZILzCrR9dWHPozUftBOVP5flT830OvZ` |
 | Apps Script | とうじょうRMO会計システム 会計API（会計Ledger にバインド） | `https://script.google.com/macros/s/AKfycbyEmlSmcJzUYnCUoAYA39Tl24d7Plqt7Puo6p6cfdS8XOokEv6ceJ9xLdNryeO7GSr4/exec` |
 | Apps Script | とうじょうRMO会計システム 予算API（予算管理 にバインド） | `https://script.google.com/macros/s/AKfycbyooLm09B5XAY8BX5m5pFaG67BtAR11xTydbrrz34VRYIGp_5WtoQ4Vv2UijcIYSz1W/exec` |
@@ -168,7 +171,7 @@ payload の項目は `gas/Code.gs` の各関数のコメントを参照してく
 
 ### 5-1. スプレッドシートと Drive
 
-1. Drive にフォルダ「とうじょうRMO会計システム」と、その中に「証憑」フォルダを作成
+1. Drive にフォルダ（現在の名前は「Accounting System」）と、その中に「証憑」フォルダを作成
 2. 会計Ledger・予算管理のスプレッドシートを用意（既存のものを「コピーを作成」すると早い）
 3. 会計Ledger の「設定」タブ「証憑フォルダID」に証憑フォルダの ID を入れる
 
