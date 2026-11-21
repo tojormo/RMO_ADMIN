@@ -151,3 +151,11 @@ tfoot tr.total td{border-bottom:0}
 .menu a{display:block;text-decoration:none;color:inherit;border-top:1px solid var(--ink);padding:16px 0 22px}
 .menu a:hover h3{text-decoration:underline}
 .menu h3{margin:6px 0 8px;font-size:20px;font-weight:900}
+.bs-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 40px}
+@media (max-width:760px){ .bs-grid{grid-template-columns:1fr} }
+.bs-side{font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--paper);background:var(--ink);padding:7px 8px}
+tr.sub td{font-weight:700;border-top:1px solid var(--hair2)}
+tr.pad td{border-bottom-color:transparent}
+tr.total td{border-bottom:2px solid var(--ink)}
+.bs-grid td{height:38px;padding-top:0;padding-bottom:0}
+tr.sub td{color:var(--ink)}

@@ -25,18 +25,26 @@
   </div>
   <div class="warn" id="warn"></div>
 
-  <div class="two">
-    <div class="card">
-      <h2>Balance Sheet<b>貸借対照表（年度末時点）</b></h2>
-      <table id="bs"></table>
+  <div class="stats" id="kpis"></div>
+
+  <div class="card">
+    <h2>Balance Sheet<b>貸借対照表（年度末時点）</b></h2>
+    <div class="bs-grid">
+      <div><div class="bs-side">資産（借方）</div><table id="bsL"></table></div>
+      <div><div class="bs-side">負債・純資産（貸方）</div><table id="bsR"></table></div>
     </div>
+  </div>
+
+  <div class="two">
     <div class="card">
       <h2>Profit &amp; Loss<b>収支計算書（当年度）</b></h2>
       <table id="pl"></table>
     </div>
+    <div class="card">
+      <h2>Expenses<b>費用の内訳（勘定科目別）</b></h2>
+      <div class="chart" id="expWrap"><canvas id="cExp" aria-label="費用の内訳"></canvas></div>
+    </div>
   </div>
-
-  <div class="stats" id="kpis"></div>
 
   <div class="two">
     <div class="card">
@@ -50,16 +58,9 @@
     </div>
   </div>
 
-
-  <div class="two">
-    <div class="card">
-      <h2>Expenses<b>費用の内訳（勘定科目別）</b></h2>
-      <div class="chart" id="expWrap"><canvas id="cExp" aria-label="費用の内訳"></canvas></div>
-    </div>
-    <div class="card">
-      <h2>Budget<b>申請書予算項目別 予算対比（費用・税込）</b></h2>
-      <table id="budget"></table>
-    </div>
+  <div class="card">
+    <h2>Budget<b>申請書予算項目別 予算対比（費用・税込）</b></h2>
+    <table id="budget"></table>
   </div>
 
   <div class="card">
@@ -131,13 +132,17 @@
     const row = (n, v, cls) => '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + esc(n) + '</td><td class="num">' + fmt(v) + '</td></tr>';
     const head = n => '<tr class="bs-head"><td colspan="2">' + n + '</td></tr>';
     const items = (arr) => arr.length ? arr.map(a => row(a.name, a.amount)).join('') : '<tr><td class="muted" colspan="2">—</td></tr>';
-    $('#bs').innerHTML = '<thead><tr><th>科目</th><th class="num">金額（円）</th></tr></thead><tbody>'
-      + head('資産の部') + items(d.bs.assets) + row('資産合計', d.bs.assetsTotal, 'total')
-      + head('負債の部') + items(d.bs.liabilities) + row('負債合計', d.bs.liabilitiesTotal, 'total')
-      + head('純資産の部') + d.bs.equity.map(a => row(a.name, a.amount)).join('')
-      + row('前期までの収支差額', d.bs.priorSurplus) + row('当期収支差額', d.bs.surplus)
-      + row('純資産合計', d.bs.equityTotal, 'total')
-      + row('負債・純資産合計', d.bs.liabilitiesTotal + d.bs.equityTotal, 'total') + '</tbody>';
+    // 貸借対照表：左に資産、右に負債・純資産（合計行の高さをそろえる）
+    const thead = '<thead><tr><th>科目</th><th class="num">金額（円）</th></tr></thead>';
+    const L = [head('資産の部')].concat(d.bs.assets.length ? d.bs.assets.map(a => row(a.name, a.amount)) : ['<tr><td class="muted">—</td><td></td></tr>']);
+    const R = [head('負債の部')].concat(d.bs.liabilities.length ? d.bs.liabilities.map(a => row(a.name, a.amount)) : ['<tr><td class="muted">—</td><td></td></tr>'])
+      .concat([row('負債合計', d.bs.liabilitiesTotal, 'sub'), head('純資産の部')])
+      .concat(d.bs.equity.map(a => row(a.name, a.amount)))
+      .concat([row('前期までの収支差額', d.bs.priorSurplus), row('当期収支差額', d.bs.surplus), row('純資産合計', d.bs.equityTotal, 'sub')]);
+    while (L.length < R.length) L.push('<tr class="pad"><td>&nbsp;</td><td></td></tr>');
+    while (R.length < L.length) R.push('<tr class="pad"><td>&nbsp;</td><td></td></tr>');
+    $('#bsL').innerHTML = thead + '<tbody>' + L.join('') + row('資産合計', d.bs.assetsTotal, 'total') + '</tbody>';
+    $('#bsR').innerHTML = thead + '<tbody>' + R.join('') + row('負債・純資産合計', d.bs.liabilitiesTotal + d.bs.equityTotal, 'total') + '</tbody>';
     $('#pl').innerHTML = '<thead><tr><th>科目</th><th class="num">金額（円）</th></tr></thead><tbody>'
       + head('収益') + items(d.pl.revenue) + row('収益合計', d.pl.revenueTotal, 'total')
       + head('費用') + items(d.pl.expense) + row('費用合計', d.pl.expenseTotal, 'total')
