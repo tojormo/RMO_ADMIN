@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TOJO RMO Admin Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+/* RMO Gantt / Accounting と同じデザイン言語 */
+:root{
+  --ink:#0b2a5b; --ink2:#2b4a7a; --mute:#7a8fae; --hair:#dfe7f3; --hair2:#c3d2e8; --paper:#ffffff; --tint:#f2f6fc;
+  --lv1:#1e4fa3; --lv2:#5b8bd6; --lv3:#b3cdf0; --accent:#e4002b;
+  --font:"Inter","Noto Sans JP",-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font);color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;letter-spacing:.01em;font-size:13px}
+
+header.hd{position:sticky;top:0;z-index:20;background:var(--paper);display:flex;align-items:center;gap:24px;padding:12px 28px;padding-top:calc(12px + env(safe-area-inset-top));border-bottom:1px solid var(--ink)}
+.eyebrow{font-size:10px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:var(--mute)}
+.hd .ttl{margin:0;font-size:16px;font-weight:900;line-height:1.2}
+.hd nav{display:flex;gap:18px;margin-left:auto;align-items:center;overflow-x:auto}
+.txtbtn{padding:6px 0;font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink);position:relative;text-decoration:none;white-space:nowrap}
+.txtbtn::after{content:"";position:absolute;left:0;right:100%;bottom:2px;height:1px;background:var(--ink);transition:right .25s}
+.txtbtn:hover::after{right:0}
+
+main{max-width:1180px;margin:0 auto;padding:36px 28px 72px}
+h1{margin:6px 0 6px;font-size:30px;font-weight:900;letter-spacing:-.01em;line-height:1.1}
+.sub{color:var(--mute);margin:0 0 30px;font-size:12px;letter-spacing:.04em;line-height:1.7}
+
+section.grp{border-top:1px solid var(--ink);padding:16px 0 34px}
+section.grp h2{margin:0 0 18px;font-size:10px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:var(--mute)}
+section.grp h2 b{display:block;margin-top:4px;font-size:15px;font-weight:900;letter-spacing:.02em;color:var(--ink);text-transform:none}
+
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+@media (max-width:900px){ .tiles{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:560px){ .tiles{grid-template-columns:1fr} }
+.tile{position:relative;display:flex;flex-direction:column;gap:6px;min-height:190px;padding:22px 22px 56px;border:1px solid var(--ink);border-top-width:4px;background:var(--paper);color:var(--ink);text-decoration:none;transition:background .2s,color .2s,transform .15s,box-shadow .2s}
+.tile .no{font-size:30px;font-weight:900;line-height:1;color:var(--lv3);font-feature-settings:"tnum";margin-bottom:10px;transition:color .2s}
+.tile .t{font-size:20px;font-weight:900;letter-spacing:.01em;line-height:1.3}
+.tile .d{font-size:12px;color:var(--mute);line-height:1.7;transition:color .2s}
+.tile .go{position:absolute;right:22px;bottom:18px;font-size:22px;font-weight:800;transition:transform .2s}
+.tile:hover{background:var(--ink);color:var(--paper);transform:translateY(-2px);box-shadow:0 10px 24px rgba(11,42,91,.18)}
+.tile:hover .eyebrow,.tile:hover .d{color:var(--hair2)}
+.tile:hover .no{color:var(--lv2)}
+.tile:hover .go{transform:translateX(4px)}
+.tile.ext{border-top-color:var(--lv2);background:var(--tint)}
+.tile.ext:hover{background:var(--ink2)}
+.tile.soon{border-color:var(--hair2);border-style:dashed;color:var(--mute);pointer-events:none}
+.tile.soon .t{color:var(--mute)}
+.tile.soon .go{font-size:10px;font-weight:600;letter-spacing:.2em}
+
+footer{max-width:1180px;margin:0 auto;padding:0 28px 40px;font-size:10px;color:var(--mute);letter-spacing:.12em}
+@media (max-width:640px){
+  header.hd{padding:8px 16px;padding-top:calc(8px + env(safe-area-inset-top));gap:12px}
+  main{padding:24px 16px 56px} footer{padding:0 16px 32px}
+}
+</style>
+</head>
+<body>
+<header class="hd">
+  <div class="brand"><div class="eyebrow">TOJO RMO</div><div class="ttl">Admin Portal</div></div>
+  <nav id="nav"></nav>
+</header>
+
+<main>
+  <div class="eyebrow">Portal</div>
+  <h1>TOJO RMO Admin</h1>
+  <p class="sub">RMO 事務局の管理ツール一覧です。</p>
+  <div id="menu"></div>
+</main>
+<footer>© TOJO RMO</footer>
+
+<script>
+/* =====================================================================
+   メニュー定義 — ここに追加するだけでポータルに反映されます
+   group : グループ（見出し）。同じ group のものがまとめて表示されます
+   href  : リンク先（このフォルダからの相対パス、または https://〜）
+   ext   : true で外部リンク（新しいタブで開く・↗表示）
+   soon  : true で「準備中」表示（クリック不可）
+   ===================================================================== */
+const GROUPS = [
+  { key: 'project', en: 'Project',    jp: 'プロジェクト管理' },
+  { key: 'finance', en: 'Accounting', jp: '会計・予算' },
+];
+const MENU = [
+  { group: 'project', en: 'Timeline',   title: 'WBS Timeline',  desc: 'WBS・ガントチャートで全体スケジュールを確認', href: 'Gantt/index.html' },
+  { group: 'finance', en: 'Accounting', title: '会計システム',   desc: '支払・収入入力、仕訳入力、BS・PL ダッシュボード', href: 'Accounting/index.html' },
+];
+
+/* ===== 描画 ===== */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let n = 0;
+const groups = [...GROUPS, ...[...new Set(MENU.map(m => m.group))].filter(k => !GROUPS.some(g => g.key === k)).map(k => ({ key: k, en: k, jp: k }))];
+document.getElementById('menu').innerHTML = groups.map(g => {
+  const items = MENU.filter(m => m.group === g.key);
+  if (!items.length) return '';
+  return `<section class="grp" id="${esc(g.key)}"><h2>${esc(g.en)}<b>${esc(g.jp)}</b></h2><div class="tiles">` +
+    items.map(m => {
+      const no = String(++n).padStart(2, '0');
+      const cls = m.soon ? 'tile soon' : m.ext ? 'tile ext' : 'tile';
+      const attr = m.soon ? '' : `href="${esc(m.href)}"` + (m.ext ? ' target="_blank" rel="noopener"' : '');
+      const go = m.soon ? 'COMING SOON' : m.ext ? '↗' : '→';
+      return `<a class="${cls}" ${attr}><span class="no">${no}</span><span class="eyebrow">${esc(m.en)}</span><span class="t">${esc(m.title)}</span><span class="d">${esc(m.desc)}</span><span class="go">${go}</span></a>`;
+    }).join('') + `</div></section>`;
+}).join('');
+document.getElementById('nav').innerHTML = groups.filter(g => MENU.some(m => m.group === g.key))
+  .map(g => `<a class="txtbtn" href="#${esc(g.key)}">${esc(g.en)}</a>`).join('');
+</script>
+</body>
+</html>

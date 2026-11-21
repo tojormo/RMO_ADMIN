@@ -14,12 +14,17 @@
   <div class="eyebrow">Menu</div>
   <h1>TOJO RMO Accounting System</h1>
   <p class="sub">支払基準・税込。データは会計Ledger（Googleスプレッドシート）に記録されます。</p>
-  <div class="menu">
-    <a href="entry.html"><div class="eyebrow">Entry</div><h3>支払・収入入力</h3><div class="muted">証憑を添付して、支払・入金を1件ずつ登録</div></a>
-    <a href="journal.html"><div class="eyebrow">Journal</div><h3>仕訳入力</h3><div class="muted">開始残高、立替精算、振替などを貸借で直接入力</div></a>
-    <a href="dashboard.html"><div class="eyebrow">Dashboard</div><h3>ダッシュボード</h3><div class="muted">貸借対照表・収支計算書・予算対比を表示</div></a>
+  <div class="tiles">
+    <a class="tile" href="entry.html"><span class="no">01</span><span class="eyebrow">Entry</span><span class="t">支払・収入入力</span><span class="d">証憑を添付して、支払・入金を1件ずつ登録</span><span class="go">→</span></a>
+    <a class="tile" href="journal.html"><span class="no">02</span><span class="eyebrow">Journal</span><span class="t">仕訳入力</span><span class="d">開始残高、立替精算、振替などを貸借で直接入力</span><span class="go">→</span></a>
+    <a class="tile" href="dashboard.html"><span class="no">03</span><span class="eyebrow">Dashboard</span><span class="t">BS・PL ダッシュボード</span><span class="d">貸借対照表・収支計算書・予算対比を表示</span><span class="go">→</span></a>
+    <a class="tile ext" href="#" data-ext="LEDGER" target="_blank" rel="noopener"><span class="no">04</span><span class="eyebrow">Ledger</span><span class="t">会計Ledger</span><span class="d">仕訳帳・勘定科目マスタ・試算表（スプレッドシート）</span><span class="go">↗</span></a>
+    <a class="tile ext" href="#" data-ext="BUDGET" target="_blank" rel="noopener"><span class="no">05</span><span class="eyebrow">Budget</span><span class="t">予算管理</span><span class="d">当初予算・改訂予算のシート（スプレッドシート）</span><span class="go">↗</span></a>
   </div>
 </main>
 <script src="common.js"></script>
+<script>
+  document.querySelectorAll('a[data-ext]').forEach(a => a.href = a.dataset.ext === 'LEDGER' ? LEDGER_URL : BUDGET_URL);
+</script>
 </body>
 </html>
