@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body data-page="dashboard">
@@ -27,22 +27,17 @@
 
   <div class="stats" id="kpis"></div>
 
-  <div class="card">
-    <h2>Balance Sheet<b>貸借対照表（年度末時点）</b></h2>
-    <div class="bs-grid">
-      <div><div class="bs-side">資産（借方）</div><table id="bsL"></table></div>
-      <div><div class="bs-side">負債・純資産（貸方）</div><table id="bsR"></table></div>
-    </div>
-  </div>
-
   <div class="two">
     <div class="card">
-      <h2>Profit &amp; Loss<b>収支計算書（当年度）</b></h2>
-      <table id="pl"></table>
+      <h2>Balance Sheet<b>貸借対照表（年度末時点）</b></h2>
+      <div class="bs-grid">
+        <div><table class="cmp fs" id="bsL"></table></div>
+        <div><table class="cmp fs" id="bsR"></table></div>
+      </div>
     </div>
     <div class="card">
-      <h2>Expenses<b>費用の内訳（勘定科目別）</b></h2>
-      <div class="chart" id="expWrap"><canvas id="cExp" aria-label="費用の内訳"></canvas></div>
+      <h2>Profit &amp; Loss<b>損益計算書（当年度）</b></h2>
+      <table class="cmp fs pl" id="pl"></table>
     </div>
   </div>
 
@@ -53,9 +48,14 @@
       <div class="chart"><canvas id="cMonthly" aria-label="月次の収益と費用"></canvas></div>
     </div>
     <div class="card">
-      <h2>Cash<b>資金残高の推移（小口現金＋普通預金、月末）</b></h2>
-      <div class="chart"><canvas id="cCash" aria-label="資金残高の推移"></canvas></div>
+      <h2>Expenses<b>費用の内訳（勘定科目別）</b></h2>
+      <div class="chart" id="expWrap"><canvas id="cExp" aria-label="費用の内訳"></canvas></div>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>Cash<b>資金残高の推移（小口現金＋普通預金、月末）</b></h2>
+    <div class="chart"><canvas id="cCash" aria-label="資金残高の推移"></canvas></div>
   </div>
 
   <div class="card" id="budgetCard">
@@ -78,192 +78,11 @@
   </div>
 </main>
 
-<script src="common.js"></script>
-<script>
-  const css = getComputedStyle(document.documentElement);
-  const C = { rev: css.getPropertyValue('--lv1').trim(), exp: css.getPropertyValue('--lv2').trim(), ink: css.getPropertyValue('--ink').trim(), grid: css.getPropertyValue('--hair').trim(), text: css.getPropertyValue('--mute').trim() };
-  const charts = {};
-  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
-  Chart.defaults.font.size = 11;
-  Chart.defaults.color = C.text;
-
-  const baseOpts = (extra) => Object.assign({
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + '：' + yen(ctx.chart.options.indexAxis === 'y' ? ctx.parsed.x : ctx.parsed.y) } } },
-    scales: {
-      x: { grid: { display: false } },
-      y: { grid: { color: C.grid }, border: { display: false }, ticks: { callback: v => fmt(v) } },
-    },
-  }, extra || {});
-
-  function draw(id, cfg) { if (charts[id]) charts[id].destroy(); charts[id] = new Chart(document.getElementById(id), cfg); }
-
-  function render(d) {
-    $('#period').textContent = d.fiscalYear + '年度（' + d.period + '）・支払基準・税込　更新 ' + d.generatedAt;
-    const sel = $('#fy');
-    sel.innerHTML = d.years.map(y => '<option' + (y === d.fiscalYear ? ' selected' : '') + '>' + y + '</option>').join('');
-
-    const w = [];
-    if (d.warnings.unbalanced.length) w.push('貸借が一致しない仕訳があります：' + d.warnings.unbalanced.join(', '));
-    if (d.warnings.unknownAccounts.length) w.push('勘定科目マスタにない科目が使われています：' + d.warnings.unknownAccounts.join(', '));
-    if (d.warnings.bsDiff) w.push('貸借対照表が一致しません（差額 ' + yen(d.warnings.bsDiff) + '）');
-    $('#warn').style.display = w.length ? 'block' : 'none';
-    $('#warn').innerHTML = w.map(esc).join('<br>');
-
-    const k = [
-      ['資金残高', d.bs.cash, '小口現金＋普通預金'],
-      ['資産合計', d.bs.assetsTotal, '年度末'],
-      ['負債合計', d.bs.liabilitiesTotal, '未払金（立替）など'],
-      ['純資産', d.bs.equityTotal, '繰越金＋収支差額'],
-      ['当期収益', d.pl.revenueTotal, d.fiscalYear + '年度'],
-      ['当期費用', d.pl.expenseTotal, d.fiscalYear + '年度'],
-      ['当期収支差額', d.pl.surplus, '収益 − 費用'],
-    ];
-    $('#kpis').innerHTML = k.map(x => '<div class="stat' + (x[1] < 0 ? ' alert' : '') + '"><div class="l">' + x[0] + '</div><div class="n">' + yen(x[1]) + '</div><div class="s">' + x[2] + '</div></div>').join('');
-
-
-    const labels = d.monthly.map(m => Number(m.month.slice(5)) + '月');
-    draw('cMonthly', { type: 'bar', data: { labels, datasets: [
-      { label: '収益', data: d.monthly.map(m => m.revenue), backgroundColor: C.rev, borderRadius: 0, maxBarThickness: 18 },
-      { label: '費用', data: d.monthly.map(m => m.expense), backgroundColor: C.exp, borderRadius: 0, maxBarThickness: 18 },
-    ] }, options: baseOpts() });
-    draw('cCash', { type: 'line', data: { labels, datasets: [
-      { label: '資金残高', data: d.monthly.map(m => m.cash), borderColor: C.ink, backgroundColor: C.ink, borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: 0 },
-    ] }, options: baseOpts() });
-
-    const ex = d.pl.expense;
-    $('#expWrap').style.height = Math.max(160, ex.length * 30 + 40) + 'px';
-    draw('cExp', { type: 'bar', data: { labels: ex.map(e => e.name), datasets: [
-      { label: '費用', data: ex.map(e => e.amount), backgroundColor: C.exp, borderRadius: 0, maxBarThickness: 18 },
-    ] }, options: baseOpts({ indexAxis: 'y', interaction: { mode: 'nearest', axis: 'y', intersect: false },
-      scales: { x: { grid: { color: C.grid }, border: { display: false }, ticks: { callback: v => fmt(v) } }, y: { grid: { display: false } } } }) });
-
-    const row = (n, v, cls) => '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + esc(n) + '</td><td class="num">' + fmt(v) + '</td></tr>';
-    const head = n => '<tr class="bs-head"><td colspan="2">' + n + '</td></tr>';
-    const items = (arr) => arr.length ? arr.map(a => row(a.name, a.amount)).join('') : '<tr><td class="muted" colspan="2">—</td></tr>';
-    // 貸借対照表：左に資産、右に負債・純資産（合計行の高さをそろえる）
-    const thead = '<thead><tr><th>科目</th><th class="num">金額（円）</th></tr></thead>';
-    const L = [head('資産の部')].concat(d.bs.assets.length ? d.bs.assets.map(a => row(a.name, a.amount)) : ['<tr><td class="muted">—</td><td></td></tr>']);
-    const R = [head('負債の部')].concat(d.bs.liabilities.length ? d.bs.liabilities.map(a => row(a.name, a.amount)) : ['<tr><td class="muted">—</td><td></td></tr>'])
-      .concat([row('負債合計', d.bs.liabilitiesTotal, 'sub'), head('純資産の部')])
-      .concat(d.bs.equity.map(a => row(a.name, a.amount)))
-      .concat([row('前期までの収支差額', d.bs.priorSurplus), row('当期収支差額', d.bs.surplus), row('純資産合計', d.bs.equityTotal, 'sub')]);
-    while (L.length < R.length) L.push('<tr class="pad"><td>&nbsp;</td><td></td></tr>');
-    while (R.length < L.length) R.push('<tr class="pad"><td>&nbsp;</td><td></td></tr>');
-    $('#bsL').innerHTML = thead + '<tbody>' + L.join('') + row('資産合計', d.bs.assetsTotal, 'total') + '</tbody>';
-    $('#bsR').innerHTML = thead + '<tbody>' + R.join('') + row('負債・純資産合計', d.bs.liabilitiesTotal + d.bs.equityTotal, 'total') + '</tbody>';
-    $('#pl').innerHTML = '<thead><tr><th>科目</th><th class="num">金額（円）</th></tr></thead><tbody>'
-      + head('収益') + items(d.pl.revenue) + row('収益合計', d.pl.revenueTotal, 'total')
-      + head('費用') + items(d.pl.expense) + row('費用合計', d.pl.expenseTotal, 'total')
-      + row('当期収支差額', d.pl.surplus, 'total') + '</tbody>';
-
-    $('#recent').innerHTML = '<thead><tr><th>仕訳ID</th><th>日付</th><th>区分</th><th>借方</th><th>貸方</th><th class="num">金額</th><th>取引先・摘要</th><th>証憑</th></tr></thead><tbody>'
-      + (d.recent.length ? d.recent.map(r => '<tr><td>' + esc(r.id) + '-' + r.line + '</td><td>' + r.date + '</td><td><span class="pill">' + esc(r.kind) + '</span></td><td>' + esc(r.debit) + '</td><td>' + esc(r.credit) + '</td><td class="num">' + fmt(r.amount) + '</td><td>' + esc(r.partner) + '<div class="muted" style="font-size:12px">' + esc(r.desc) + '</div></td><td>' + (r.url ? '<a href="' + esc(r.url) + '" target="_blank">開く</a>' : '') + '</td></tr>').join('')
-        : '<tr><td colspan="8" class="muted">仕訳がありません</td></tr>') + '</tbody>';
-  }
-
-  /* ===== 予算対比（予算 API） ===== */
-  const PREF = 'rmo_budget_view';
-  const pref = (() => { try { return JSON.parse(localStorage.getItem(PREF) || '{}'); } catch (e) { return {}; } })();
-  const savePref = () => { try { localStorage.setItem(PREF, JSON.stringify(pref)); } catch (e) {} };
-  let B = null;                       // 予算 API の結果
-  const collapsed = new Set(pref.collapsed || []);
-  let level = pref.level || 3;
-  let visible = null;                 // 表示する予算バージョン名
-
-  function buildTree(rep) {
-    const tree = [];
-    const find = (arr, name) => arr.find(n => n.name === name) || (arr.push({ name, children: [] }), arr[arr.length - 1]);
-    rep.items.forEach(i => find(find(tree, i.l1).children, i.l2).children.push(i));
-    rep.unassigned.forEach(u => {
-      if (u.level === 2) find(find(tree, u.l1).children, u.l2).children.push({ code: '', l3: '（小項目未設定）', budgets: {}, actual: u.actual, un: true });
-      else if (u.level === 1) find(find(tree, u.l1).children, '（中項目未設定）').children.push({ code: '', l3: '（小項目未設定）', budgets: {}, actual: u.actual, un: true });
-      else find(find(tree, '（予算項目未設定）').children, '（中項目未設定）').children.push({ code: '', l3: '（小項目未設定）', budgets: {}, actual: u.actual, un: true });
-    });
-    const sum = (node) => {
-      if (!node.children) return node;
-      node.budgets = {}; node.actual = 0;
-      node.children.forEach(c => { sum(c); node.actual += c.actual; Object.keys(c.budgets).forEach(v => node.budgets[v] = (node.budgets[v] || 0) + c.budgets[v]); });
-      return node;
-    };
-    tree.forEach(sum);
-    return tree;
-  }
-
-  function renderBudget() {
-    if (!B) return;
-    const vers = B.versions.map(v => v.name);
-    if (!visible) visible = (pref.visible || []).filter(v => vers.indexOf(v) >= 0);
-    if (!visible.length && vers.length) visible = vers.length > 1 ? [vers[0], vers[vers.length - 1]] : [vers[0]];
-    $('#verBtns').innerHTML = vers.length ? vers.map(v => '<button type="button" class="chip' + (visible.indexOf(v) >= 0 ? ' on' : '') + '" data-v="' + esc(v) + '">' + esc(v) + '</button>').join('')
-      : '<span class="muted">予算シートがありません</span>';
-    document.querySelectorAll('[data-lv]').forEach(b => b.classList.toggle('on', Number(b.dataset.lv) === level));
-    const shown = vers.filter(v => visible.indexOf(v) >= 0);
-    const base = shown[shown.length - 1] || null;
-    $('#budgetNote').textContent = (base ? '残額・執行率は「' + base + '」が基準です。' : '予算を1つ以上選ぶと残額・執行率を表示します。')
-      + '実績は ' + B.fiscalYear + '年度の会計Ledgerから集計（' + B.generatedAt + '）。行をクリックすると開閉できます。';
-
-    const tree = buildTree(B);
-    const cols = shown.map(v => '<th class="num">' + esc(v.replace('_', ' ')) + '</th>').join('');
-    let html = '<thead><tr><th>予算項目</th><th>コード</th>' + cols + '<th class="num act">実績</th>' + (base ? '<th class="num">残額</th><th class="rate">執行率</th>' : '') + '</tr></thead><tbody>';
-    const cells = n => {
-      const bud = base ? (n.budgets[base] || 0) : 0;
-      const rate = bud ? n.actual / bud : (n.actual ? Infinity : 0);
-      return shown.map(v => '<td class="num">' + (n.budgets[v] === undefined ? '<span class="muted">—</span>' : fmt(n.budgets[v])) + '</td>').join('')
-        + '<td class="num act">' + fmt(n.actual) + '</td>'
-        + (base ? '<td class="num' + (bud - n.actual < 0 ? ' ng' : '') + '">' + fmt(bud - n.actual) + '</td>'
-          + '<td class="rate"><div class="bar' + (rate > 1 ? ' over' : '') + '"><span style="width:' + Math.min(100, (isFinite(rate) ? rate : 1) * 100) + '%"></span></div><span class="muted" style="font-size:11px">' + (bud ? (rate * 100).toFixed(1) + '%' : (n.actual ? '予算なし' : '')) + '</span></td>' : '');
-    };
-    const tg = (key, has) => '<span class="tg' + (has ? '' : ' none') + '">' + (collapsed.has(key) ? '▸' : '▾') + '</span>';
-    tree.forEach(n1 => {
-      const k1 = '1|' + n1.name;
-      html += '<tr class="l1" data-k="' + esc(k1) + '"><td>' + (level > 1 ? tg(k1, true) : '') + esc(n1.name) + '</td><td></td>' + cells(n1) + '</tr>';
-      if (level < 2 || collapsed.has(k1)) return;
-      n1.children.forEach(n2 => {
-        const k2 = '2|' + n1.name + '|' + n2.name;
-        html += '<tr class="l2" data-k="' + esc(k2) + '"><td>' + (level > 2 ? tg(k2, true) : '<span class="tg none"></span>') + esc(n2.name) + '</td><td></td>' + cells(n2) + '</tr>';
-        if (level < 3 || collapsed.has(k2)) return;
-        n2.children.forEach(i => {
-          html += '<tr class="l3' + (i.un ? ' un' : '') + '"><td>' + esc(i.l3) + '</td><td class="muted">' + esc(i.code) + '</td>' + cells(i) + '</tr>';
-        });
-      });
-    });
-    const total = { budgets: {}, actual: 0 };
-    tree.forEach(n => { total.actual += n.actual; Object.keys(n.budgets).forEach(v => total.budgets[v] = (total.budgets[v] || 0) + n.budgets[v]); });
-    html += '<tr class="total"><td>合計</td><td></td>' + cells(total) + '</tr></tbody>';
-    $('#budgetTbl').innerHTML = html;
-  }
-
-  $('#verBtns').addEventListener('click', e => {
-    const v = e.target.dataset && e.target.dataset.v; if (!v) return;
-    const i = visible.indexOf(v);
-    if (i >= 0) visible.splice(i, 1); else visible.push(v);
-    pref.visible = visible.slice(); savePref(); renderBudget();
-  });
-  document.querySelectorAll('[data-lv]').forEach(b => b.addEventListener('click', () => {
-    level = Number(b.dataset.lv); collapsed.clear(); pref.level = level; pref.collapsed = []; savePref(); renderBudget();
-  }));
-  $('#budgetTbl').addEventListener('click', e => {
-    const tr = e.target.closest('tr[data-k]'); if (!tr) return;
-    const k = tr.dataset.k;
-    if (tr.classList.contains('l1') && level < 2) return;
-    if (tr.classList.contains('l2') && level < 3) return;
-    collapsed.has(k) ? collapsed.delete(k) : collapsed.add(k);
-    pref.collapsed = Array.from(collapsed); savePref(); renderBudget();
-  });
-
-  function load(fy) {
-    $('#period').textContent = '読み込み中…';
-    run('getDashboardData', fy || null).then(d => {
-      render(d);
-      return runBudget('getBudgetReport', d.fiscalYear).then(rep => { B = rep; renderBudget(); })
-        .catch(err => { $('#budgetNote').textContent = '予算を読み込めませんでした：' + (err.message || err); });
-    }).catch(err => toast('データを読み込めませんでした\n' + esc(err.message || err), true));
-  }
-  $('#fy').addEventListener('change', e => load(Number(e.target.value)));
-  $('#reload').addEventListener('click', () => load(Number($('#fy').value)));
-  load();
-</script>
+<script src="js/config.js"></script>
+<script src="js/core.js"></script>
+<script src="js/model.js"></script>
+<script src="js/store.js"></script>
+<script src="js/widgets.js"></script>
+<script src="js/dashboard.js"></script>
 </body>
 </html>

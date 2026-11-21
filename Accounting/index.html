@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body data-page="home">
 <main>
@@ -22,9 +22,10 @@
     <a class="tile ext" href="#" data-ext="BUDGET" target="_blank" rel="noopener"><span class="no">05</span><span class="eyebrow">Budget</span><span class="t">予算管理</span><span class="d">当初予算・改訂予算のシート（スプレッドシート）</span><span class="go">↗</span></a>
   </div>
 </main>
-<script src="common.js"></script>
+<script src="js/config.js"></script>
+<script src="js/core.js"></script>
 <script>
-  document.querySelectorAll('a[data-ext]').forEach(a => a.href = a.dataset.ext === 'LEDGER' ? LEDGER_URL : BUDGET_URL);
+  document.querySelectorAll('a[data-ext]').forEach(a => a.href = a.dataset.ext === 'LEDGER' ? CONFIG.LEDGER_URL : CONFIG.BUDGET_URL);
 </script>
 </body>
 </html>

@@ -103,7 +103,7 @@ table{width:100%;border-collapse:collapse}
 th,td{padding:9px 6px;border-bottom:1px solid var(--hair);text-align:left;vertical-align:middle}
 thead th{font-size:9px;font-weight:600;letter-spacing:.2em;color:var(--mute);border-bottom:1px solid var(--ink)}
 td.num,th.num{text-align:right;font-feature-settings:"tnum"}
-tr.total td{font-weight:800;border-top:1px solid var(--ink)}
+tr.total td{font-weight:800;border-top:1px solid var(--ink);border-bottom:2px solid var(--ink)}
 tfoot tr.total td{border-bottom:0}
 .pill{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.14em;padding:2px 7px;border:1px solid var(--ink)}
 .ok{color:var(--key);font-weight:700}.ng{color:var(--accent);font-weight:700}
@@ -116,7 +116,6 @@ tfoot tr.total td{border-bottom:0}
 .loading.on{display:block}
 .loading i{position:absolute;top:0;bottom:0;width:30%;background:var(--ink);animation:ld 1s ease-in-out infinite}
 @keyframes ld{from{left:-30%}to{left:100%}}
-.spinner{display:none}
 .ov{position:fixed;inset:0;display:none;z-index:90;background:rgba(242,246,252,.88);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px}
 .ov.open{display:flex}
 .login{width:100%;max-width:380px;border-top:3px solid var(--ink);padding-top:22px}
@@ -142,19 +141,10 @@ tfoot tr.total td{border-bottom:0}
 .chart{position:relative;height:280px}
 .legend{display:flex;gap:14px;align-items:center;font-size:10px;letter-spacing:.16em;color:var(--mute);font-weight:600;margin:-6px 0 10px}
 .legend i{display:inline-block;width:18px;height:6px;margin-right:6px;vertical-align:middle}
-.bs-head td{font-size:9px;font-weight:600;letter-spacing:.2em;color:var(--mute);background:var(--tint);padding-top:7px;padding-bottom:7px}
 .bar{height:6px;background:var(--hair);min-width:80px;margin-bottom:3px}
 .bar>span{display:block;height:100%;background:var(--lv1)}
 .bar.over>span{background:var(--accent)}
 .warn{display:none;margin:0 0 20px;padding:12px 14px;border-left:3px solid var(--accent);background:#fdf0f2;color:var(--accent);font-size:12px;line-height:1.7}
-.bs-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 40px}
-@media (max-width:760px){ .bs-grid{grid-template-columns:1fr} }
-.bs-side{font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--paper);background:var(--ink);padding:7px 8px}
-tr.sub td{font-weight:700;border-top:1px solid var(--hair2)}
-tr.pad td{border-bottom-color:transparent}
-tr.total td{border-bottom:2px solid var(--ink)}
-.bs-grid td{height:38px;padding-top:0;padding-bottom:0}
-tr.sub td{color:var(--ink)}
 
 /* ===== 予算対比（Gantt の LV 表示に準拠） ===== */
 .btb{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center;margin-bottom:12px}
@@ -202,3 +192,20 @@ tr.sub td{color:var(--ink)}
 .tile.ext:hover{background:var(--ink2)}
 label .auto{display:inline-block;margin-left:6px;padding:0 5px;background:var(--key);color:var(--paper);font-size:9px;font-weight:700;letter-spacing:.08em;line-height:1.6;vertical-align:1px}
 select:disabled{background:var(--paper);border-style:dashed;color:var(--ink);opacity:1;cursor:not-allowed}
+
+/* 貸借対照表・損益計算書（共通の財務表スタイル table.fs） */
+.bs-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+@media (max-width:760px){ .bs-grid{grid-template-columns:1fr} }
+table.cmp td,table.cmp th{padding:6px 6px;font-size:12.5px}
+table.cmp thead th{font-size:9px}
+table.fs td{height:32px;padding-top:0;padding-bottom:0}
+table.fs thead th{font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--ink);padding-top:8px;padding-bottom:8px}
+table.fs tr.sec td{font-size:10px;font-weight:600;letter-spacing:.2em;color:var(--mute);background:var(--tint)}
+table.fs tr.pad td{border-bottom-color:transparent}
+/* 3段階：科目（細字・字下げ）／小計（太字・上に細線）／総計（極太・上に線、下に二重線） */
+table.fs tbody tr:not([class]) td,table.fs tr.un td{font-weight:400;color:var(--ink2)}
+table.fs tbody tr:not([class]) td:first-child,table.fs tr.un td:first-child{padding-left:20px}
+table.fs tr.un td{color:var(--accent)}
+table.fs tr.sub td{font-weight:700;color:var(--ink);border-top:1px solid var(--ink)}
+table.fs tr.total td{font-weight:800;font-size:14px;color:var(--ink);border-top:1px solid var(--ink);border-bottom:3px double var(--ink)}
+table.fs tr:has(+ tr.sub) td,table.fs tr:has(+ tr.total) td{border-bottom-color:var(--ink)}
