@@ -83,9 +83,10 @@
     if (b.version) $('#budgetHint').textContent = '予算「' + b.version + '」から選択。選ぶと実績が予算対比に集計されます';
     $('#bl3').addEventListener('change', () => {
       const it = bp.item(); if (!it) return;
-      if (it.account && kind === '支払' && !f.account.value) {
-        if (![...f.account.options].some(o => o.value === it.account)) { $('#allAcct').checked = true; refreshAccounts(); }
-        f.account.value = it.account; refreshFund(); refreshSummary();
+      const acct = M && Model.findAccount(M.accounts, it.account, it.accountCode);
+      if (acct && kind === '支払' && !f.account.value) {
+        if (![...f.account.options].some(o => o.value === acct.name)) { $('#allAcct').checked = true; refreshAccounts(); }
+        f.account.value = acct.name; refreshFund(); refreshSummary();
       }
       if (it.fund && !f.fund.value && !f.fund.disabled && [...f.fund.options].some(o => o.value === it.fund)) f.fund.value = it.fund;
     });

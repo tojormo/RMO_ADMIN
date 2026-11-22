@@ -27,9 +27,23 @@ t('資金原資別', () => assert.deepStrictEqual(d.funds.map(f => [f.fund, f.re
 t('貸借一致', () => { assert.strictEqual(d.warnings.bsDiff, 0); assert.deepStrictEqual(d.warnings.unbalanced, []); });
 
 const r = Model.budgetReport(fx.budget, ctx, list, 2026);
+const byKey = a => a.slice().sort((p, q) => String(p[0]).localeCompare(String(q[0])));
 t('予算対比の実績', () => assert.deepStrictEqual(
-  r.items.map(i => [i.code, i.actual]).concat(r.unassigned.map(u => [u.level + ':' + u.l2, u.actual])),
-  fx.expected.budget2026));
+  byKey(r.items.map(i => [i.code, i.actual]).concat(r.unassigned.map(u => [u.level + ':' + u.l2, u.actual]))),
+  byKey(fx.expected.budget2026)));
+t('予算の並び順は最新バージョンの行順', () => {
+  const latest = fx.budget.versions[fx.budget.versions.length - 1];
+  const codes = latest.rows.map(x => String(x[latest.headers.indexOf('予算コード')])).filter(Boolean);
+  assert.deepStrictEqual(r.items.map(i => i.code).slice(0, codes.length), codes);
+});
+t('予算の勘定科目「505_広告宣伝費」形式', () => {
+  assert.deepStrictEqual(Model.splitAccount('505_広告宣伝費'), { code: '505', name: '広告宣伝費' });
+  assert.deepStrictEqual(Model.splitAccount('広告宣伝費'), { code: '', name: '広告宣伝費' });
+  const accts = [{ code: '505', name: '広告宣伝費' }, { code: '515', name: 'ICTソフト費' }];
+  assert.strictEqual(Model.findAccount(accts, '広告宣伝費', '505').code, '505');
+  assert.strictEqual(Model.findAccount(accts, '旧名称', '515').name, 'ICTソフト費');
+  assert.strictEqual(Model.findAccount(accts, '無い科目', ''), null);
+});
 t('予算の木構造の合計', () => {
   const tree = Model.budgetTree(r);
   const total = tree.reduce((s, n1) => s + n1.actual, 0);

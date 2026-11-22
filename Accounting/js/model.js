@@ -168,6 +168,17 @@
 
   /* ===== 予算 ===== */
 
+  /** 「505_広告宣伝費」→ { code:'505', name:'広告宣伝費' }。コードが無ければ name だけ */
+  function splitAccount(v) {
+    const m = str(v).trim().match(/^(\d+)[_＿\s　]+(.+)$/);
+    return m ? { code: m[1], name: m[2].trim() } : { code: '', name: str(v).trim() };
+  }
+
+  /** 予算の勘定科目を勘定科目マスタの行に対応づける（科目名 → コードの順で探す） */
+  function findAccount(accounts, name, code) {
+    return accounts.find(a => str(a.name) === name) || (code ? accounts.find(a => str(a.code) === code) : null) || null;
+  }
+
   /** 予算API getBudget の結果 → バージョンごとの予算行 */
   function budgetVersions(budget) {
     return ((budget && budget.versions) || []).map(v => ({
@@ -175,7 +186,9 @@
       items: records(v, COLS_.budget).filter(i => str(i.code).trim() !== '').map(i => Object.assign(i, {
         code: str(i.code).trim(),
         l1: str(i.l1) || '（大項目なし）', l2: str(i.l2) || '（中項目なし）', l3: str(i.l3) || '（小項目なし）',
-        account: str(i.account), fund: str(i.fund), amount: num(i.amount),
+        // 勘定科目は「広告宣伝費」「505_広告宣伝費」「505 広告宣伝費」のどれでも可（コードと科目名に分ける）
+        accountLabel: str(i.account), account: splitAccount(i.account).name, accountCode: splitAccount(i.account).code,
+        fund: str(i.fund), amount: num(i.amount),
       })),
     }));
   }
@@ -193,12 +206,15 @@
    */
   function budgetReport(budget, ctx, list, fy) {
     const vs = budgetVersions(budget);
-    const map = {}, order = [];
+    const map = {};
     vs.forEach(v => v.items.forEach(i => {
-      if (!map[i.code]) { map[i.code] = { code: i.code, budgets: {}, actual: 0 }; order.push(i.code); }
+      if (!map[i.code]) map[i.code] = { code: i.code, budgets: {}, actual: 0 };
       Object.assign(map[i.code], { l1: i.l1, l2: i.l2, l3: i.l3, account: i.account, fund: i.fund, memo: str(i.memo) });
       map[i.code].budgets[v.name] = i.amount;
     }));
+    // 並び順は最新バージョンの行順。古いバージョンにしか無い項目はその後ろ
+    const order = [];
+    vs.slice().reverse().forEach(v => v.items.forEach(i => { if (order.indexOf(i.code) < 0) order.push(i.code); }));
     const types = {};
     ctx.accounts.forEach(a => types[str(a.name)] = str(a.type));
     const l2Of = {}, l1Set = {};
@@ -243,6 +259,6 @@
     return tree;
   }
 
-  const Model = { records, fiscalYearOf, fiscalMonths, context, entries, dashboard, budgetVersions, budgetItems, budgetReport, budgetTree };
+  const Model = { records, splitAccount, findAccount, fiscalYearOf, fiscalMonths, context, entries, dashboard, budgetVersions, budgetItems, budgetReport, budgetTree };
   if (typeof module !== 'undefined') module.exports = Model; else root.Model = Model;
 })(this);
