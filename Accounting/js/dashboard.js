@@ -122,31 +122,41 @@
     const tree = Model.budgetTree(B);
     const cols = shown.map(v => '<th class="num">' + esc(v.replace('_', ' ')) + '</th>').join('');
     let html = '<thead><tr><th>予算項目</th><th>コード</th>' + cols + '<th class="num act">実績</th>' + (base ? '<th class="num">残額</th><th class="rate">執行率</th>' : '') + '</tr></thead><tbody>';
-    const cells = n => {
+    // 予算超過：基準予算に対して実績が超えている（予算 0 で実績ありも超過）
+    const isOver = n => {
+      if (!base) return false;
+      const bud = n.budgets[base] || 0;
+      return bud ? n.actual > bud : n.actual > 0;
+    };
+    // showOver：上位の階層（中項目・大項目）も超過しているときだけ超過表示にする
+    const cells = (n, showOver) => {
       const bud = base ? (n.budgets[base] || 0) : 0;
       const rate = bud ? n.actual / bud : (n.actual ? Infinity : 0);
+      const over = showOver && isOver(n);
       return shown.map(v => '<td class="num">' + (n.budgets[v] === undefined ? '<span class="muted">—</span>' : fmt(n.budgets[v])) + '</td>').join('')
         + '<td class="num act">' + fmt(n.actual) + '</td>'
-        + (base ? '<td class="num' + (bud - n.actual < 0 ? ' ng' : '') + '">' + fmt(bud - n.actual) + '</td>'
-          + '<td class="rate"><div class="bar' + (rate > 1 ? ' over' : '') + '"><span style="width:' + Math.min(100, (isFinite(rate) ? rate : 1) * 100) + '%"></span></div><span class="muted" style="font-size:11px">' + (bud ? (rate * 100).toFixed(1) + '%' : (n.actual ? '予算なし' : '')) + '</span></td>' : '');
+        + (base ? '<td class="num' + (over ? ' ng' : '') + '">' + fmt(bud - n.actual) + '</td>'
+          + '<td class="rate"><div class="bar' + (over ? ' over' : '') + '"><span style="width:' + Math.min(100, (isFinite(rate) ? rate : 1) * 100) + '%"></span></div><span class="muted" style="font-size:11px">' + (bud ? (rate * 100).toFixed(1) + '%' : (n.actual ? '予算なし' : '')) + '</span></td>' : '');
     };
     const tg = (key, has) => '<span class="tg' + (has ? '' : ' none') + '">' + (collapsed.has(key) ? '▸' : '▾') + '</span>';
     tree.forEach(n1 => {
       const k1 = '1|' + n1.name;
-      html += '<tr class="l1" data-k="' + esc(k1) + '"><td>' + (level > 1 ? tg(k1, true) : '') + esc(n1.name) + '</td><td></td>' + cells(n1) + '</tr>';
+      html += '<tr class="l1" data-k="' + esc(k1) + '"><td>' + (level > 1 ? tg(k1, true) : '') + esc(n1.name) + '</td><td></td>' + cells(n1, true) + '</tr>';
       if (level < 2 || collapsed.has(k1)) return;
+      const over1 = isOver(n1);
       n1.children.forEach(n2 => {
+        const over2 = over1 && isOver(n2);
         const k2 = '2|' + n1.name + '|' + n2.name;
-        html += '<tr class="l2" data-k="' + esc(k2) + '"><td>' + (level > 2 ? tg(k2, true) : '<span class="tg none"></span>') + esc(n2.name) + '</td><td></td>' + cells(n2) + '</tr>';
+        html += '<tr class="l2" data-k="' + esc(k2) + '"><td>' + (level > 2 ? tg(k2, true) : '<span class="tg none"></span>') + esc(n2.name) + '</td><td></td>' + cells(n2, over1) + '</tr>';
         if (level < 3 || collapsed.has(k2)) return;
         n2.children.forEach(i => {
-          html += '<tr class="l3' + (i.un ? ' un' : '') + '"><td>' + esc(i.l3) + '</td><td class="muted">' + esc(i.code) + '</td>' + cells(i) + '</tr>';
+          html += '<tr class="l3' + (i.un ? ' un' : '') + '"><td>' + esc(i.l3) + '</td><td class="muted">' + esc(i.code) + '</td>' + cells(i, over2) + '</tr>';
         });
       });
     });
     const total = { budgets: {}, actual: 0 };
     tree.forEach(n => { total.actual += n.actual; Object.keys(n.budgets).forEach(v => total.budgets[v] = (total.budgets[v] || 0) + n.budgets[v]); });
-    html += '<tr class="total"><td>合計</td><td></td>' + cells(total) + '</tr></tbody>';
+    html += '<tr class="total"><td>合計</td><td></td>' + cells(total, true) + '</tr></tbody>';
     $('#budgetTbl').innerHTML = html;
   }
 
