@@ -3,6 +3,7 @@
 
 (function (root) {
   const COLS_ = (typeof COLS !== 'undefined') ? COLS : require('./config.js').COLS;
+  const CONFIG_ = (typeof CONFIG !== 'undefined') ? CONFIG : require('./config.js').CONFIG;
 
   /** { headers, rows } → オブジェクト配列。cols（キー → 見出し名）のキーと、見出し名そのもの（追加列用）の両方で引ける */
   function records(table, cols) {
@@ -18,6 +19,7 @@
 
   const num = v => Number(v) || 0;
   const str = v => (v === null || v === undefined) ? '' : String(v);
+  const isTrue = v => v === true || String(v).toUpperCase() === 'TRUE';
 
   function fiscalYearOf(dateStr, startMonth) {
     const m = str(dateStr).match(/^(\d{4})-(\d{2})/);
@@ -35,10 +37,26 @@
     return out;
   }
 
+  /** 事業マスタ（getConfig の masters）→ [{ name, kind:'事業'|'共通', order, active, note }]（表示順） */
+  function businesses(masters) {
+    const C = COLS_.business;
+    return ((masters || {})[CONFIG_.BUSINESS_MASTER] || [])
+      .map(o => ({ name: str(o[C.name]).trim(), kind: str(o[C.kind]).trim() || '事業', order: Number(o[C.order]) || 999, active: isTrue(o[C.active]), note: str(o[C.note]) }))
+      .filter(b => b.name)
+      .sort((a, b) => a.order - b.order);
+  }
+
   /** 会計API getConfig の結果を画面用に整える */
   function context(config) {
     const s = config.settings || {};
+    const bs = businesses(config.masters);
+    const common = bs.find(b => b.kind === '共通');
     return {
+      businesses: bs,
+      activeBusinesses: bs.filter(b => b.active),
+      commonBusiness: common ? common.name : '共通',
+      // 事業の売上にしない収入科目（設定タブ「共通収入科目」）。PL では一般管理費の後に加算
+      commonRevenueAccounts: s.commonRevenueAccounts || str(s['共通収入科目']).split(/[,、，]/).map(x => x.trim()).filter(Boolean),
       settings: s,
       startMonth: Number(s.startMonth) || 4,
       fiscalYear: Number(s.fiscalYear) || null,
@@ -64,6 +82,7 @@
         month: str(e.month) || str(e.date).slice(0, 7),
         drAcct: str(e.drAcct), crAcct: str(e.crAcct), drAmt: num(e.drAmt), crAmt: num(e.crAmt),
         fund: str(e.fund), budgetItem: str(e.budgetItem).trim(), budgetCode: str(e.budgetCode).trim(),
+        business: str(e.business).trim(),
       }));
   }
 
@@ -87,6 +106,11 @@
     months.forEach(m => monthly[m] = { revenue: 0, expense: 0, cashDelta: 0 });
     let cashOpening = 0;
     const unknown = new Set(), balance = {}, recent = [], fundSum = {};
+    // 事業別損益：事業マスタで区分「事業」の事業 → 売上・原価。それ以外（空欄・共通）→ 費用は一般管理費、収益は共通収入
+    const segKind = {};
+    (ctx.businesses || []).forEach(b => { segKind[b.name] = b.kind; });
+    const seg = {}, commonRev = {};
+    let sga = 0;
 
     list.forEach(e => {
       if (!e.fy) return;
@@ -109,6 +133,16 @@
             if (isCash) monthly[e.month].cashDelta += x.dr ? x.amt : -x.amt;
           }
         }
+        if (isPL(a.type) && e.fy === fy) {
+          const v = a.type === '収益' ? (x.dr ? -x.amt : x.amt) : (x.dr ? x.amt : -x.amt);
+          const b = e.business;
+          const isSeg = b && segKind[b] !== '共通' && ctx.commonRevenueAccounts.indexOf(a.name) < 0;
+          if (isSeg) {
+            const o = seg[b] = seg[b] || { revenue: 0, cost: 0 };
+            if (a.type === '収益') o.revenue += v; else o.cost += v;
+          } else if (a.type === '収益') commonRev[a.name] = (commonRev[a.name] || 0) + v;
+          else sga += v;
+        }
         if (isPL(a.type) && e.fy <= fy) {
           const f = e.fund || a.fundClass || '（未設定）';
           const o = fundSum[f] = fundSum[f] || { rev: 0, exp: 0, cumRev: 0, cumExp: 0, acc: {} };
@@ -118,7 +152,7 @@
         }
       });
       if (e.fy === fy) {
-        recent.push({ id: e.id, line: e.line, date: e.date, kind: str(e.kind), debit: e.drAcct, credit: e.crAcct,
+        recent.push({ id: e.id, line: e.line, date: e.date, kind: str(e.kind), business: e.business, debit: e.drAcct, credit: e.crAcct,
           amount: e.drAmt || e.crAmt, partner: str(e.partner), desc: str(e.description), url: str(e.voucherUrl).split('\n')[0] });
       }
     });
@@ -134,6 +168,20 @@
       .reduce((t, a) => t + (a.type === '収益' ? a.priorCr - a.priorDr : -(a.priorDr - a.priorCr)), 0);
     const revenueTotal = sum(revenue), expenseTotal = sum(expense), surplus = revenueTotal - expenseTotal;
     const equityTotal = sum(equity) + priorSurplus + surplus;
+
+    // 事業別：有効な事業（区分「事業」）は金額が 0 でも表示。マスタに無い事業名は known:false で残す
+    const segNames = (ctx.businesses || []).filter(b => b.kind !== '共通' && (b.active || seg[b.name])).map(b => b.name)
+      .concat(Object.keys(seg).filter(n => !segKind[n]));
+    const segments = segNames.map(n => {
+      const o = seg[n] || { revenue: 0, cost: 0 };
+      return { name: n, known: segKind[n] === '事業', revenue: o.revenue, cost: o.cost, gross: o.revenue - o.cost };
+    });
+    const grossTotal = segments.reduce((t, x) => t + x.gross, 0);
+    const commonRevenue = Object.keys(commonRev).map(n => ({ name: n, amount: commonRev[n] })).filter(x => x.amount !== 0);
+    ctx.commonRevenueAccounts.slice().reverse().forEach(n => {   // 交付金などは 0 でも先頭に表示
+      if (!commonRevenue.some(x => x.name === n) && byName[n]) commonRevenue.unshift({ name: n, amount: 0 });
+    });
+    const commonRevenueTotal = commonRevenue.reduce((t, x) => t + x.amount, 0);
 
     let running = cashOpening;
     const monthlyArr = months.map(m => { running += monthly[m].cashDelta; return { month: m, revenue: monthly[m].revenue, expense: monthly[m].expense, cash: running }; });
@@ -154,7 +202,16 @@
         assetsTotal: sum(assets), liabilitiesTotal: sum(liabilities), equityTotal,
         cash: assets.filter(a => ctx.cashAccounts.indexOf(a.name) >= 0).reduce((t, a) => t + a.amount, 0),
       },
-      pl: { revenue, expense, revenueTotal, expenseTotal, surplus },
+      pl: {
+        revenue, expense, revenueTotal, expenseTotal, surplus,
+        segments: segments,
+        revenueBySegment: segments.reduce((t, x) => t + x.revenue, 0),
+        costBySegment: segments.reduce((t, x) => t + x.cost, 0),
+        grossTotal: grossTotal,
+        sga: sga,                                  // 一般管理費
+        operating: grossTotal - sga,               // 事業損益
+        commonRevenue: commonRevenue, commonRevenueTotal: commonRevenueTotal,
+      },
       monthly: monthlyArr,
       funds: funds,
       recent: recent.slice(-15).reverse(),
@@ -259,6 +316,6 @@
     return tree;
   }
 
-  const Model = { records, splitAccount, findAccount, fiscalYearOf, fiscalMonths, context, entries, dashboard, budgetVersions, budgetItems, budgetReport, budgetTree };
+  const Model = { records, businesses, splitAccount, findAccount, fiscalYearOf, fiscalMonths, context, entries, dashboard, budgetVersions, budgetItems, budgetReport, budgetTree };
   if (typeof module !== 'undefined') module.exports = Model; else root.Model = Model;
 })(this);

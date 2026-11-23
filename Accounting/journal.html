@@ -32,7 +32,7 @@
         <div class="c3"><label>資金原資</label><select name="fund"></select></div>
         <div class="c3"><label>証憑番号</label><input name="voucherNo"></div>
         <div class="c3"><label>入力者</label><input name="enteredBy"></div>
-        <div class="c3"></div>
+        <div class="c3"><label id="busLabel">事業</label><select name="business" id="business"></select><div class="hint" id="busHint">明細で事業を選ばなかった行に入ります。収益・費用の行には必須</div></div>
         <div class="c4"><label>予算大項目</label><select name="bl1" id="bl1"></select></div>
         <div class="c4"><label>予算中項目</label><select name="bl2" id="bl2"></select></div>
         <div class="c4"><label>予算小項目</label><select name="bl3" id="bl3"></select><div class="hint" id="budgetHint">予算管理スプレッドシートの最新版から選択。選ぶと実績が予算対比に集計されます</div></div>
@@ -42,9 +42,9 @@
     <div class="card">
       <h2>Lines<b>仕訳明細</b></h2>
       <table id="lines">
-        <thead><tr><th style="width:24%">借方科目</th><th class="num" style="width:14%">借方金額</th><th style="width:24%">貸方科目</th><th class="num" style="width:14%">貸方金額</th><th>行摘要（任意）</th><th></th></tr></thead>
+        <thead><tr><th style="width:20%">借方科目</th><th class="num" style="width:12%">借方金額</th><th style="width:20%">貸方科目</th><th class="num" style="width:12%">貸方金額</th><th style="width:16%">事業</th><th>行摘要（任意）</th><th></th></tr></thead>
         <tbody></tbody>
-        <tfoot><tr class="total"><td>合計</td><td class="num bal" id="dSum">0</td><td></td><td class="num bal" id="cSum">0</td><td id="diff" colspan="2"></td></tr></tfoot>
+        <tfoot><tr class="total"><td>合計</td><td class="num bal" id="dSum">0</td><td></td><td class="num bal" id="cSum">0</td><td id="diff" colspan="3"></td></tr></tfoot>
       </table>
       <div class="actions" style="justify-content:flex-start">
         <button type="button" class="btn ghost small" id="add">＋ 行を追加</button>

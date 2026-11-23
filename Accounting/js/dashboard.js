@@ -73,27 +73,31 @@
       .concat([row('負債合計', d.bs.liabilitiesTotal, 'sub'), head('純資産の部')])
       .concat(d.bs.equity.map(a => row(a.name, a.amount)))
       .concat([row('前期までの収支差額', d.bs.priorSurplus), row('当期収支差額', d.bs.surplus), row('純資産合計', d.bs.equityTotal, 'sub')]);
-    // 損益計算書：売上は RMO交付金収入／事業収入、原価は資金原資（RMO交付金／自己資金）別
-    const revOf = n => (d.pl.revenue.find(r => r.name === n) || { amount: 0 }).amount;
-    const SALES = CONFIG.SALES_ACCOUNTS;
-    const otherRev = d.pl.revenue.filter(r => SALES.indexOf(r.name) < 0);
-    const funds = d.funds || [];
-    const fundBlock = f => row(f.known ? f.fund : '未分類（' + f.fund + '）', f.expense, f.known ? '' : 'un');
-    const P = [head('売上（収益）')]
-      .concat(SALES.map(n => row(n, revOf(n))), otherRev.map(r => row(r.name + '（その他）', r.amount)))
-      .concat([row('売上合計', d.pl.revenueTotal, 'sub'), head('原価（費用）— 資金原資別')])
-      .concat(funds.filter(f => f.known || f.expense).map(fundBlock))
-      .concat([row('原価合計', d.pl.expenseTotal, 'sub')]);
+    // 損益計算書（事業別）：事業ごとの売上・原価・粗利 → 一般管理費 → 事業損益 → 共通収入 → 最終利益
+    // 列は「売上｜原価｜粗利・損益」。一般管理費は右の列にマイナスで置き、右の列を上から足すと最終利益になる
+    const p = d.pl;
+    const prow = (n, rev, cost, val, cls) => '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + esc(n) + '</td>'
+      + [rev, cost, val].map(v => '<td class="num">' + (v === null ? '' : fmt(v)) + '</td>').join('') + '</tr>';
+    const phead = n => '<tr class="sec"><td colspan="4">' + n + '</td></tr>';
+    const P = [phead('事業別')]
+      .concat(p.segments.length ? p.segments.map(x => prow(x.known ? x.name : x.name + '（事業マスタにない）', x.revenue, x.cost, x.gross, x.known ? '' : 'un'))
+        : ['<tr><td class="muted">—</td><td></td><td></td><td></td></tr>'])
+      .concat([prow('粗利合計', p.revenueBySegment, p.costBySegment, p.grossTotal, 'sub'),
+        phead('共通'), prow('一般管理費', null, null, -p.sga), prow('事業損益', null, null, p.operating, 'sub'),
+        phead('共通収入')])
+      .concat(p.commonRevenue.length ? p.commonRevenue.map(x => prow(x.name, null, null, x.amount)) : ['<tr><td class="muted">—</td><td></td><td></td><td></td></tr>']);
     // 3つの表の最終行（総計）がそろうよう、短い表の総計の直前に空欄行を入れる
     const rows = Math.max(L.length, R.length, P.length);
-    [L, R, P].forEach(t => { while (t.length < rows) t.push(pad); });
+    [L, R].forEach(t => { while (t.length < rows) t.push(pad); });
+    while (P.length < rows) P.push('<tr class="pad"><td>&nbsp;</td><td></td><td></td><td></td></tr>');
     $('#bsL').innerHTML = thead('資産（借方）') + '<tbody>' + L.join('') + row('資産合計', d.bs.assetsTotal, 'total') + '</tbody>';
     $('#bsR').innerHTML = thead('負債・純資産（貸方）') + '<tbody>' + R.join('') + row('負債・純資産合計', d.bs.liabilitiesTotal + d.bs.equityTotal, 'total') + '</tbody>';
-    $('#pl').innerHTML = thead('科目') + '<tbody>' + P.join('') + row('当期収支差額', d.pl.surplus, 'total') + '</tbody>';
+    $('#pl').innerHTML = '<thead><tr><th>科目</th><th class="num">売上</th><th class="num">原価</th><th class="num">粗利・損益</th></tr></thead>'
+      + '<tbody>' + P.join('') + prow('最終利益（当期収支差額）', null, null, p.surplus, 'total') + '</tbody>';
 
-    $('#recent').innerHTML = '<thead><tr><th>仕訳ID</th><th>日付</th><th>区分</th><th>借方</th><th>貸方</th><th class="num">金額</th><th>取引先・摘要</th><th>証憑</th></tr></thead><tbody>'
+    $('#recent').innerHTML = '<thead><tr><th>仕訳ID</th><th>日付</th><th>区分</th><th>事業</th><th>借方</th><th>貸方</th><th class="num">金額</th><th>取引先・摘要</th><th>証憑</th></tr></thead><tbody>'
       + (d.recent.length ? d.recent.map(r => '<tr><td>' + esc(r.id) + '-' + r.line + '</td><td>' + r.date + '</td><td><span class="pill">' + esc(r.kind) + '</span></td><td>' + esc(r.debit) + '</td><td>' + esc(r.credit) + '</td><td class="num">' + fmt(r.amount) + '</td><td>' + esc(r.partner) + '<div class="muted" style="font-size:12px">' + esc(r.desc) + '</div></td><td>' + (r.url ? '<a href="' + esc(r.url) + '" target="_blank">開く</a>' : '') + '</td></tr>').join('')
-        : '<tr><td colspan="8" class="muted">仕訳がありません</td></tr>') + '</tbody>';
+        : '<tr><td colspan="9" class="muted">仕訳がありません</td></tr>') + '</tbody>';
   }
 
   /* ===== 予算対比（予算 API） ===== */

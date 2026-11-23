@@ -12,8 +12,8 @@ const CONFIG = {
   SYSTEM_NAME: 'とうじょうRMO会計システム',
   TIMEZONE: 'Asia/Tokyo',
   STORAGE_KEY: 'rmo_accounting_key',
-  // 損益計算書の売上区分（勘定科目名）
-  SALES_ACCOUNTS: ['RMO交付金収入', '事業収入'],
+  // 事業別損益：事業マスタのシート名（共通収入にする科目は会計Ledger「設定」タブの「共通収入科目」）
+  BUSINESS_MASTER: '事業マスタ',
 };
 
 /* 列の対応（キー → スプレッドシートの見出し名） */
@@ -24,7 +24,9 @@ const COLS = {
     taxRate: '税率', taxAmt: '消費税額', partner: '取引先', invoiceNo: 'インボイス登録番号', description: '摘要',
     budgetItem: '申請書予算項目', fund: '資金原資', voucherNo: '証憑番号', voucherUrl: '証憑URL',
     enteredBy: '入力者', created: '登録日時', status: '状態', budgetCode: '予算コード',
+    business: '事業',
   },
+  business: { name: '事業', kind: '区分', order: '表示順', active: '有効', note: '説明' },
   budget: {
     code: '予算コード', l1: '予算大項目', l2: '予算中項目', l3: '予算小項目', account: '勘定科目', fund: '資金原資',
     amount: '予算額（総事業費）', rmo: 'うちRMO交付金', own: 'うち自己資金', memo: 'メモ',

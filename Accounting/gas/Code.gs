@@ -1,11 +1,12 @@
 /**
- * とうじょうRMO会計システム 会計API（v2）
+ * とうじょうRMO会計システム 会計API（v3：事業別損益に対応）
  *
  * 方針：この GAS は原則として変更しない。
  * - データの読み書きと入力チェックだけを行い、集計・表示は HTML 側（RMO_ADMIN/Accounting）で行う
  * - 列は「見出し名」で読み書きする。スプレッドシートに列を追加しても GAS の変更は不要
  *   （追加列は getConfig / getLedger でそのまま返り、登録時は payload.extra に { 見出し名: 値 } で渡せば書き込まれる）
  * - 「〜マスタ」という名前のシートはすべて getConfig で返す（マスタの行の追加・変更は GAS の変更不要）
+ * - 事業（v3）：収益・費用の仕訳には「事業」（事業マスタの有効な行）が必須。設定タブ「共通収入科目」の科目は常に共通の事業
  *
  * API（POST {action, args, key}）
  *   getConfig()                 設定・マスタ・仕訳帳の見出し
@@ -27,10 +28,13 @@ const F = {
   taxRate: '税率', taxAmt: '消費税額', partner: '取引先', invoiceNo: 'インボイス登録番号', description: '摘要',
   budgetItem: '申請書予算項目', fund: '資金原資', voucherNo: '証憑番号', voucherUrl: '証憑URL',
   enteredBy: '入力者', created: '登録日時', status: '状態', budgetCode: '予算コード',
+  business: '事業',
 };
 // マスタ：GAS が入力チェックに使う列（キー → 見出し名）
 const ACCOUNT_COLS = { code: 'コード', name: '勘定科目', type: '区分', side: '正常残高', usage: '入力画面', active: '有効', note: '説明', fundClass: '資金区分' };
 const SOURCE_COLS = { name: '支払元', account: '勘定科目', kind: '種別', memo: '口座情報・メモ', active: '有効' };
+const BUSINESS_COLS = { name: '事業', kind: '区分', order: '表示順', active: '有効', note: '説明' };
+const BUSINESS_MASTER = '事業マスタ';
 
 /* ========== Web API ========== */
 
@@ -42,7 +46,7 @@ const API_ACTIONS = {
 };
 
 function doGet() {
-  return json_({ ok: true, data: { service: 'とうじょうRMO会計システム 会計API', version: 2, actions: Object.keys(API_ACTIONS), time: now_() } });
+  return json_({ ok: true, data: { service: 'とうじょうRMO会計システム 会計API', version: 3, actions: Object.keys(API_ACTIONS), time: now_() } });
 }
 
 function doPost(e) {
@@ -135,6 +139,7 @@ function settings_() {
     voucherFolderId: String(m['証憑フォルダID'] || '').trim(),
     idPrefix: String(m['仕訳ID接頭辞'] || 'J'),
     funds: String(m['資金原資'] || 'RMO交付金,自己資金').split(/[,、，]/).map(s => s.trim()).filter(String),
+    commonRevenueAccounts: String(m['共通収入科目'] || '').split(/[,、，]/).map(s => s.trim()).filter(String),
   };
 }
 
@@ -157,6 +162,39 @@ function sources_(masters) {
     .filter(s => s.name !== '').map(s => Object.assign(s, { active: isTrue_(s.active) }));
 }
 
+function businesses_(masters) {
+  return (masters[BUSINESS_MASTER] || []).map(o => withKeys_(o, BUSINESS_COLS))
+    .filter(b => String(b.name).trim() !== '')
+    .map(b => Object.assign(b, { name: String(b.name).trim(), kind: String(b.kind).trim() || '事業', active: isTrue_(b.active) }));
+}
+
+/**
+ * 事業を決める。収益・費用の科目なら必須（事業マスタの有効な行）。共通収入科目は常に共通の事業。
+ * 科目が資産・負債・純資産だけのときは、指定があれば有効な事業か確認してそのまま返す（無ければ空欄）
+ */
+function resolveBusiness_(accts, given, ctx, label, errors) {
+  const pl = accts.filter(a => a && (a.type === '収益' || a.type === '費用'));
+  const name = String(given || '').trim();
+  if (pl.some(a => ctx.common.indexOf(a.name) >= 0)) {
+    if (!ctx.commonName) { errors.push('事業マスタに区分「共通」の行がありません'); return ''; }
+    return ctx.commonName;
+  }
+  if (!name) {
+    if (pl.length) errors.push(label + '事業を選んでください（どの事業とも特定できない場合は「' + (ctx.commonName || '共通') + '」）');
+    return '';
+  }
+  if (!ctx.active[name]) errors.push(label + '事業「' + name + '」は事業マスタにないか、有効ではありません');
+  return name;
+}
+
+function businessCtx_(masters, s) {
+  const bs = businesses_(masters);
+  const active = {};
+  bs.filter(b => b.active).forEach(b => active[b.name] = true);
+  const common = bs.find(b => b.active && b.kind === '共通');
+  return { active: active, commonName: common ? common.name : '', common: s.commonRevenueAccounts };
+}
+
 /**
  * 設定・マスタ・仕訳帳の見出し
  * accounts / sources は有効・無効を含む全行（短いキー付き）。masters は「〜マスタ」シートの全列（見出し名キー）
@@ -165,9 +203,10 @@ function getConfig() {
   const masters = masters_();
   const s = settings_();
   return {
-    settings: Object.assign({}, settingsMap_(), { startMonth: s.startMonth, fiscalYear: s.fiscalYear, funds: s.funds }),
+    settings: Object.assign({}, settingsMap_(), { startMonth: s.startMonth, fiscalYear: s.fiscalYear, funds: s.funds, commonRevenueAccounts: s.commonRevenueAccounts }),
     accounts: accounts_(masters),
     sources: sources_(masters),
+    businesses: businesses_(masters),
     masters: masters,
     ledgerHeaders: table_(sheet_(LEDGER_SHEET)).headers,
     today: Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'),
@@ -265,7 +304,7 @@ function withLock_(fn) {
 /**
  * 支払・収入の登録
  * payload: { kind:'支払'|'収入', date:'yyyy-MM-dd', source, account, amount, taxRate, taxAmount, partner, invoiceNo,
- *            description, budgetItem, budgetCode, fund, voucherNo, enteredBy, files:[{name,mimeType,data}], extra:{見出し名:値} }
+ *            description, budgetItem, budgetCode, fund, business, voucherNo, enteredBy, files:[{name,mimeType,data}], extra:{見出し名:値} }
  * 資金原資：収入は勘定科目マスタ「資金区分」で自動決定。費用の支払は必須（設定タブ「資金原資」の選択肢）
  */
 function submitTransaction(payload) {
@@ -290,6 +329,7 @@ function submitTransaction(payload) {
   if (acct && p.kind === '収入' && acct.fundClass) fund = String(acct.fundClass);
   if (acct && acct.type === '費用' && !fund) errors.push('資金原資（' + s.funds.join('／') + '）を選んでください');
   if (fund && s.funds.indexOf(fund) < 0) errors.push('資金原資「' + fund + '」は設定タブの選択肢にありません');
+  const business = acct ? resolveBusiness_([acct], p.business, businessCtx_(masters, s), '', errors) : '';
   if (errors.length) throw new Error(errors.join('\n'));
 
   let tax = toInt_(p.taxAmount);
@@ -308,21 +348,27 @@ function submitTransaction(payload) {
       description: String(p.description).trim() + (src.kind === '立替' ? '／' + src.name : ''),
       budgetItem: p.budgetItem || '', fund: fund, voucherNo: p.voucherNo || '', voucherUrl: urls.join('\n'),
       enteredBy: p.enteredBy || Session.getActiveUser().getEmail(), created: now_(), status: '有効', budgetCode: p.budgetCode || '',
+      business: business,
     };
     appendRows_([v], p.extra);
-    return { id: id, urls: urls, debit: v.drAcct, credit: v.crAcct, amount: amount, fund: fund };
+    return { id: id, urls: urls, debit: v.drAcct, credit: v.crAcct, amount: amount, fund: fund, business: business };
   });
 }
 
 /**
  * 仕訳の登録（複合仕訳可）
- * payload: { date, description, partner, invoiceNo, budgetItem, budgetCode, fund, voucherNo, enteredBy,
- *            lines:[{debitAccount, debitAmount, creditAccount, creditAmount, memo}], files, extra }
+ * payload: { date, description, partner, invoiceNo, budgetItem, budgetCode, fund, business, voucherNo, enteredBy,
+ *            lines:[{debitAccount, debitAmount, creditAccount, creditAmount, memo, business}], files, extra }
+ * 事業は行ごとに指定可（lines[].business）。行に無ければ伝票の business を使う
  */
 function submitJournal(payload) {
   const p = payload || {};
   const s = settings_();
-  const names = new Set(accounts_(masters_()).filter(a => a.active).map(a => a.name));
+  const masters = masters_();
+  const accts = accounts_(masters).filter(a => a.active);
+  const names = new Set(accts.map(a => a.name));
+  const bctx = businessCtx_(masters, s);
+  const acctOf = n => accts.find(a => a.name === n);
   const errors = [];
   let date;
   try { date = parseDate_(p.date); } catch (e) { errors.push(e.message); }
@@ -336,7 +382,8 @@ function submitJournal(payload) {
     if (l.creditAccount && !names.has(l.creditAccount)) errors.push((i + 1) + '行目: 貸方科目が不正です');
     if (l.debitAccount && !(dA > 0)) errors.push((i + 1) + '行目: 借方金額を入力してください');
     if (l.creditAccount && !(cA > 0)) errors.push((i + 1) + '行目: 貸方金額を入力してください');
-    return { dAcct: l.debitAccount || '', dAmt: dA || 0, cAcct: l.creditAccount || '', cAmt: cA || 0, memo: String(l.memo || '').trim() };
+    const business = resolveBusiness_([acctOf(l.debitAccount), acctOf(l.creditAccount)], l.business || p.business, bctx, (i + 1) + '行目: ', errors);
+    return { dAcct: l.debitAccount || '', dAmt: dA || 0, cAcct: l.creditAccount || '', cAmt: cA || 0, memo: String(l.memo || '').trim(), business: business };
   }).filter(Boolean);
   if (!lines.length) errors.push('仕訳行を1行以上入力してください');
   const dSum = lines.reduce((t, l) => t + l.dAmt, 0);
@@ -356,6 +403,7 @@ function submitJournal(payload) {
       partner: p.partner || '', invoiceNo: p.invoiceNo || '', description: l.memo || String(p.description).trim(),
       budgetItem: p.budgetItem || '', fund: p.fund || '', voucherNo: p.voucherNo || '', voucherUrl: urls.join('\n'),
       enteredBy: p.enteredBy || Session.getActiveUser().getEmail(), created: created, status: '有効', budgetCode: p.budgetCode || '',
+      business: l.business,
     }));
     appendRows_(rows, p.extra);
     return { id: id, lines: rows.length, total: dSum, urls: urls };
@@ -366,6 +414,6 @@ function submitJournal(payload) {
 
 function testRead() {
   const c = getConfig();
-  Logger.log(JSON.stringify({ settings: c.settings, accounts: c.accounts.length, sources: c.sources.length, masters: Object.keys(c.masters), headers: c.ledgerHeaders }));
+  Logger.log(JSON.stringify({ settings: c.settings, accounts: c.accounts.length, sources: c.sources.length, businesses: c.businesses, masters: Object.keys(c.masters), headers: c.ledgerHeaders }));
   Logger.log(JSON.stringify(getLedger()).slice(0, 2000));
 }

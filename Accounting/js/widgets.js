@@ -16,6 +16,11 @@ function fillSelect(sel, items, opts) {
   }
 }
 
+/** 事業の選択肢（事業マスタの有効な行。共通は説明付き） */
+function fillBusiness(sel, m) {
+  fillSelect(sel, m.businesses || [], { label: b => b.kind === '共通' ? b.name + '（どの事業とも特定できない）' : b.name });
+}
+
 /** 添付ファイル（ドラッグ＆ドロップ対応） */
 function FilePicker(dropEl, inputEl, listEl, previewEl) {
   const files = [];

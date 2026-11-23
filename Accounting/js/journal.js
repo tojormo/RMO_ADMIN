@@ -19,6 +19,8 @@
     const amt = v => { const i = document.createElement('input'); i.className = 'num'; i.inputMode = 'numeric'; i.value = v ? Number(v).toLocaleString('ja-JP') : ''; i.addEventListener('blur', () => { const n = toInt(i.value); if (n > 0) i.value = n.toLocaleString('ja-JP'); }); return i; };
     td().appendChild(acctSelect(l.d)); td().appendChild(amt(l.da));
     td().appendChild(acctSelect(l.c)); td().appendChild(amt(l.ca));
+    const bus = document.createElement('select');
+    fillSelect(bus, M.businesses || [], { placeholder: '（伝票と同じ）' }); bus.value = l.b || ''; td().appendChild(bus);
     const memo = document.createElement('input'); memo.value = l.memo || ''; td().appendChild(memo);
     const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'rm'; rm.textContent = '削除'; rm.title = '行を削除';
     rm.onclick = () => { tr.remove(); recalc(); }; td().appendChild(rm);
@@ -26,8 +28,8 @@
   }
   function readLines() {
     return Array.from(tbody.rows).map(tr => {
-      const [d, da, c, ca, memo] = tr.querySelectorAll('select, input');
-      return { debitAccount: d.value, debitAmount: toInt(da.value) || 0, creditAccount: c.value, creditAmount: toInt(ca.value) || 0, memo: memo.value };
+      const [d, da, c, ca, bus, memo] = tr.querySelectorAll('select, input');
+      return { debitAccount: d.value, debitAmount: toInt(da.value) || 0, creditAccount: c.value, creditAmount: toInt(ca.value) || 0, business: bus.value, memo: memo.value };
     });
   }
   function recalc() {
@@ -38,6 +40,13 @@
     const ok = d > 0 && d === c && ls.every(l => (!l.debitAccount || l.debitAmount > 0) && (!l.creditAccount || l.creditAmount > 0));
     $('#diff').innerHTML = d === c ? (d > 0 ? '<span class="ok">✓ 貸借一致</span>' : '') : '<span class="ng">✕ 差額 ' + fmt(Math.abs(d - c)) + '</span>';
     $('#submit').disabled = !ok;
+    // 伝票の事業：明細で事業を選んでいない収益・費用の行（共通収入科目を除く）があれば必須
+    if (M) {
+      const isPL = n => { const a = M.accounts.find(x => x.name === n); return a && (a.type === '収益' || a.type === '費用') && M.commonRevenueAccounts.indexOf(n) < 0; };
+      const need = ls.some(l => !l.business && (isPL(l.debitAccount) || isPL(l.creditAccount)));
+      f.business.required = need;
+      $('#busLabel').innerHTML = '事業' + (need ? '<span class="req"></span>' : '');
+    }
   }
   tbody.addEventListener('input', recalc); tbody.addEventListener('change', recalc);
   $('#add').onclick = () => addLine();
@@ -59,6 +68,7 @@
       const data = Object.fromEntries(new FormData(f).entries());
       Object.assign(data, bp ? bp.value() : {}); delete data.bl1; delete data.bl2; delete data.bl3;
       data.lines = readLines().filter(l => l.debitAccount || l.creditAccount);
+      // 事業：明細の事業が優先。空欄の行には伝票の事業（data.business）が入る
       data.files = await picker.read();
       const res = await Api.call('submitJournal', data);
       toast('仕訳を登録しました：' + res.id + '（' + res.lines + '行・' + yen(res.total) + '）');
@@ -83,6 +93,7 @@
     M = m;
     f.date.value = m.today; f.enteredBy.value = m.user || '';
     fillSelect(f.fund, m.funds, { placeholder: '（任意）' });
+    fillBusiness(f.business, m);
     addLine(); addLine();
   }).catch(err => toast('マスタを読み込めませんでした\n' + esc(err.message || err), true));
 })();

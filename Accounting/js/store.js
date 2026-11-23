@@ -23,6 +23,6 @@ const Store = {
   },
   /** 入力画面用のマスタ（有効なものだけ） */
   inputMasters(ctx) {
-    return { accounts: ctx.activeAccounts, sources: ctx.sources, funds: ctx.funds, today: ctx.today, user: ctx.user };
+    return { accounts: ctx.activeAccounts, sources: ctx.sources, funds: ctx.funds, businesses: ctx.activeBusinesses, commonBusiness: ctx.commonBusiness, commonRevenueAccounts: ctx.commonRevenueAccounts, today: ctx.today, user: ctx.user };
   },
 };
